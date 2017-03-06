@@ -9,10 +9,10 @@ import Function
 import Http
 
 # 页码
-page = 2
+page = 1
 # 终止页码。为0时根据last_start_id来判断是否停止爬取；非0时爬完此页即停止
 # 此参数必须 >= page
-max_page = 2
+max_page = 5
 # 要下载的图片类型。0=全部 1=横图 2=竖图 3=正方形
 pic_type = 1
 # 图片尺寸限制。0为不限制
@@ -39,6 +39,8 @@ while True:
         for li in Yandere.get_li(html):
             i += 1
             info = Yandere.get_info(li)[0]  # (id, img_url, width, height)
+            width = int(info[2])
+            height = int(info[3])
 
             # 存储last_start_id
             if i == 1:
@@ -59,25 +61,34 @@ while True:
                 break
 
             download = False  # 是否下载此图？
-            # 不想写一长串……只好如此了
+            # 判断图片类型（不想写一长串……只好如此了）
             if pic_type == 0:
                 download = True
-            elif pic_type == 1 and info[2] > info[3]:
+            elif pic_type == 1 and width > height:
                 download = True
-            elif pic_type == 2 and info[2] < info[3]:
+            elif pic_type == 2 and width < height:
                 download = True
-            elif pic_type == 3 and info[2] == info[3]:
+            elif pic_type == 3 and width == height:
                 download = True
             else:
                 Log.add('图片类型不符，跳过')
                 continue
-
-            # todo 判断尺寸限制……
+            # 判断图片尺寸
+            if width >= pic_size['min']['width'] and height >= pic_size['min']['height']:
+                if pic_size['max']['width'] and width > pic_size['max']['width']:
+                    download = False
+                if pic_size['max']['height'] and height > pic_size['max']['height']:
+                    download = False
+            else:
+                download = False
+            if not download:
+                Log.add('图片尺寸不符，跳过')
+                continue
 
             if download:
-                # 获取文件名，并进行url解码
+                # 获取文件名
+                # 此处不进行URL解码，因为有些文件名神TM带*之类的
                 file_name = info[1].split('/')[-1]
-                file_name = urllib.parse.unquote(file_name)
                 # 文件是否已存在？
                 if Function.exists(file_name):
                     Log.add(info[0] + ' 已存在，跳过')
