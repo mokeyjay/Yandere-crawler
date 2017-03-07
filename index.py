@@ -12,13 +12,13 @@ import Http
 page = 1
 # 终止页码。为0时根据last_start_id来判断是否停止爬取；非0时爬完此页即停止
 # 此参数必须 >= page
-max_page = 5
+max_page = 1
 # 要下载的图片类型。0=全部 1=横图 2=竖图 3=正方形
 pic_type = 1
-# 图片尺寸限制。0为不限制
+# 图片尺寸限制，0为不限制。proportion为图片宽高比
 pic_size = {
-    'min': {'width': 0, 'height': 0},
-    'max': {'width': 0, 'height': 0},
+    'min': {'width': 0, 'height': 0, 'proportion': 0},
+    'max': {'width': 0, 'height': 0, 'proportion': 2},
 }
 
 # 创建目录存放今天爬下来的图
@@ -80,6 +80,10 @@ while True:
                 if pic_size['max']['height'] and height > pic_size['max']['height']:
                     download = False
             else:
+                download = False
+            # 判断图片宽高比
+            proportion = width / height
+            if proportion < pic_size['min']['proportion'] or (pic_size['max']['proportion'] and proportion > pic_size['max']['proportion']):
                 download = False
             if not download:
                 Log.add('图片尺寸不符，跳过')
