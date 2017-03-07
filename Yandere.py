@@ -1,5 +1,3 @@
-import urllib.request
-import urllib
 import re
 import Http
 import Log

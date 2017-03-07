@@ -31,6 +31,11 @@ def write(file_name: str, data, root: bool = False):
 
 
 def get(file_name: str):
+    """
+    获取文件内容
+    :param file_name: 文件名
+    :return: str
+    """
     file = open(file_name)
     data = file.readline()
     file.close()
@@ -38,5 +43,10 @@ def get(file_name: str):
 
 
 def exists(file_name: str):
+    """
+    文件是否存在
+    :param file_name: 文件名
+    :return: bool
+    """
     global _folder_name
     return os.path.exists(_folder_name + '/' + file_name)
