@@ -20,3 +20,11 @@ def get():
     """
     global _log_msg
     return _log_msg
+
+
+def reset():
+    """
+    清除临时日志内容
+    """
+    global _log_msg
+    _log_msg = ''
