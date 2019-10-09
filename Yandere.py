@@ -10,7 +10,7 @@ def get_html(page=1):
     :type page: int
     :return: str
     """
-    url = 'https://yande.re/post?page='+str(page)
+    url = 'https://yande.re/post.xml?page='+str(page)
     html = Http.get(url)
     if not html:
         Log.add('抓取 ' + url + ' 失败')
@@ -31,7 +31,7 @@ def get_li(html: str):
     :type html: str
     :return: list
     """
-    return re.compile('<li style="width: 160px;" id="p.+?</li>').findall(html)
+    return re.compile(r'<post id="\d{6}.+?"/>').findall(html)
 
 
 def get_info(li):
@@ -41,4 +41,4 @@ def get_info(li):
     :type li: str
     :return: list (id, largeimg_url, width, height)
     """
-    return re.compile('id="p(\d+)" class=".+?img" href="(.+?)">.+?directlink-res">(\d+) x (\d+)</span>').findall(li)
+    return re.compile('post id="(\d+)" tags=".+?file_url="(.+?)".+?is_pending="\w+?" width="(\d+)" height="(\d+)".+?/>').findall(li)

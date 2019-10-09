@@ -50,3 +50,13 @@ def exists(file_name: str):
     """
     global _folder_name
     return os.path.exists(_folder_name + '/' + file_name)
+
+
+def char_replace(file_name):
+    """
+    去除特殊字符
+    """
+    chr_list = ('?', '\\', r'/', '*', ':', '<', '>', '|', '"')
+    for chr in chr_list:
+        file_name = file_name.replace(chr, '')
+    return file_name
