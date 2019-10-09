@@ -10,7 +10,7 @@ def get_html(page=1):
     :type page: int
     :return: str
     """
-    url = 'https://yande.re/post.xml?page='+str(page)
+    url = 'https://yande.re/post.xml?page='+str(page) #其实是XML哒
     html = Http.get(url)
     if not html:
         Log.add('抓取 ' + url + ' 失败')
@@ -39,6 +39,6 @@ def get_info(li):
     获取详情。即id,largeimgurl,width,height
     :param li: li的源码
     :type li: str
-    :return: list (id, largeimg_url, width, height)
+    :return: list (id, size, ext, largeimg_url, width, height)
     """
-    return re.compile('post id="(\d+)" tags=".+?file_url="(.+?)".+?is_pending="\w+?" width="(\d+)" height="(\d+)".+?/>').findall(li)
+    return re.compile('post id="(\d+)" tags=".+?file_size="(\d+?)" file_ext="(\w+?)" file_url="(.+?)".+?is_pending="\w+?" width="(\d+)" height="(\d+)".+?/>').findall(li)

@@ -2,7 +2,7 @@ import os.path
 import datetime
 
 # 图片存储位置
-_folder_name = 'E:/Yandere/'
+_folder_name = 'H:/Yandere/'
 
 
 def create_folder():
@@ -24,6 +24,20 @@ def write(file_name: str, data, root: bool = False):
     global _folder_name
     file_name = file_name if root else _folder_name + '/' + file_name  # 类似三元运算符
     file = open(file_name, 'wb')
+    if isinstance(data, int) or isinstance(data, str):
+        data = str(data).encode()
+    file.write(data)
+    file.close()
+
+
+def add(file_name: str, data, root: bool = False):
+    """
+    追加文件，用于即时写入日志
+    :return:
+    """
+    global _folder_name
+    file_name = file_name if root else _folder_name + '/' + file_name  # 类似三元运算符
+    file = open(file_name, 'ab')
     if isinstance(data, int) or isinstance(data, str):
         data = str(data).encode()
     file.write(data)
@@ -54,7 +68,7 @@ def exists(file_name: str):
 
 def char_replace(file_name):
     """
-    去除保留字符
+    去除特殊字符
     """
     chr_list = ('?', '\\', r'/', '*', ':', '<', '>', '|', '"')
     for chr in chr_list:

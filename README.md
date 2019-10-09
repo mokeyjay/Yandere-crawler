@@ -1,15 +1,7 @@
 ## Yande.re图片爬虫
 
 ### 前言
-每天打开电脑第一件事，就是打开[Y站](https://yande.re/post)，看看又更新了哪些图片、其中又有哪些适合作为壁纸
-
-日久天长，总会感觉浪费时间精力，每天都要在一堆图片里找PC壁纸
-
-这可不符合我作为一个码农的身份
-
-正好最近想学学`Python3`，于是一边看着[廖学峰的Python教程](http://www.liaoxuefeng.com/wiki/0014316089557264a6b348958f449949df42a6d3a2e542c000)一边撸出来这个项目。写得很差，轻喷
-
-本项目基于`Win7`、`Python3.5.2`开发，其他环境下未测试
+改造https://github.com/mokeyjay/Yandere-crawler
 
 ### 功能
 - 支持从指定的**开始页码**爬取到**结束页码**
@@ -28,6 +20,9 @@
 > 例如某图片的详情页Url为：`https://yande.re/post/show/346737`，则图片id为`346737`
 
 然后命令行执行`python index.py`即可（Windows下）。Linux下可直接执行
+
+
+上面的别看了，准备改用文件存储设置
 
 ### 注意事项
 
