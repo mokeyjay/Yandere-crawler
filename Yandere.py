@@ -1,44 +1,53 @@
 import re
+import json
 import Http
 import Log
 
 
-def get_html(page=1):
+def get_json(page=1):
     """
-    获取列表页的html源码
+    获取列表页的json数据
     :param page: 页码
     :type page: int
     :return: str
     """
-    url = 'https://yande.re/post.xml?page='+str(page) #其实是XML哒
-    html = Http.get(url)
-    if not html:
-        Log.add('抓取 ' + url + ' 失败')
+    url = 'https://yande.re/post.json?page='+str(page) #JSON API
+    json_data = Http.get(url)
+    if not json_data:
+        Log.add('请求 ' + url + ' 失败')
         exit()
 
     try:
-        html = html.decode('utf-8')
+        json_data = json_data.decode('utf-8')
     except:
         Log.add(url + ' 解码失败')
         exit(500)
-    return html
+    return json_data
 
 
-def get_li(html: str):
+def get_li(json_data: str):
     """
-    获取li源码列表
-    :param html: html源码
-    :type html: str
+    获取li数据列表
+    :param json: json数组
+    :type json: str
     :return: list
     """
-    return re.compile(r'<post id="\d{6}.+?"/>').findall(html)
+    return json.loads(json_data)
 
 
-def get_info(li):
+def get_info(dic):
     """
     获取详情。即id,largeimgurl,width,height
-    :param li: li的源码
-    :type li: str
+    :param dic: json中单个post的数据
+    :type dic: dictionary
     :return: list (id, size, ext, largeimg_url, width, height)
     """
-    return re.compile('post id="(\d+)" tags=".+?file_size="(\d+?)" file_ext="(\w+?)" file_url="(.+?)".+?is_pending="\w+?" width="(\d+)" height="(\d+)".+?/>').findall(li)
+    i = 0
+    plist = ['1', '2', '3', '4', '5', '6']
+    jlist = ['id', 'file_size', 'file_ext', 'file_url', 'width', 'height']
+    # id file_size width height 为 int : 0,1,4,5
+    # file_ext file_url 为 str : 2,3
+    for ele in jlist:
+        plist[i] = dic[ele]
+        i += 1
+    return plist
