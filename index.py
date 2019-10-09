@@ -37,14 +37,15 @@ while True:
     # 终止页码为0 或 未到达终止页码时 才进行爬取
     if max_page == 0 or page <= max_page:
         # 获取页面内容
-        Log.add('正在读取第'+str(page)+'页……')
-        html = Yandere.get_html(page)
+        Log.add('\n正在读取第'+str(page)+'页……')
+        json = Yandere.get_json(page)
         # 获取每个li的内容
-        for li in Yandere.get_li(html):
+        for li in Yandere.get_li(json):
             i += 1
-            info = Yandere.get_info(li)[0]  # (id, size, ext, img_url, width, height)
-            width = int(info[4])
-            height = int(info[5])
+            info = Yandere.get_info(li) # (id, size, ext, img_url, width, height)
+            width = info[4]
+            height = info[5]
+            info[0] = str(info[0])
 
             # 存储last_start_id
             if i == 1:
@@ -103,7 +104,7 @@ while True:
                     Log.add(info[0] + ' 已存在，跳过')
                     continue
 
-                Log.add(str(i) + '. ' + datetime.datetime.now().strftime('%H:%M:%S') + ' 开始下载p' + info[0] + ' 大小' + str("%.2f" %(int(info[1])/1048576)) + 'M 类型' + info[2])
+                Log.add(str(i) + '. ' + datetime.datetime.now().strftime('%H:%M:%S') + ' 开始下载p' + info[0] + ' 大小' + str("%.2f" %(info[1]/1048576)) + 'M 类型' + info[2])
                 ts = time.time()
                 img = Http.get(info[3], {'Host': 'files.yande.re', 'Referer': 'https://yande.re/post/show/'+info[0]})
                 Log.add('下载完毕。耗时：'+str(int(time.time() - ts))+'s')
