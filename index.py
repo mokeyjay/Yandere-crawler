@@ -91,8 +91,9 @@ while True:
 
             if download:
                 # 获取文件名
-                # 此处不进行URL解码，因为有些文件名神TM带*之类的
-                file_name = info[1].split('/')[-1]
+                # URL解码
+                file_name = urllib.parse.unquote(info[1].split('/')[-1])
+                file_name = Function.char_replace(file_name)
                 # 文件是否已存在？
                 if Function.exists(file_name):
                     Log.add(info[0] + ' 已存在，跳过')
