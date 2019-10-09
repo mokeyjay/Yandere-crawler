@@ -45,7 +45,6 @@ while True:
             info = Yandere.get_info(li) # (id, size, ext, img_url, width, height)
             width = info[4]
             height = info[5]
-            info[0] = str(info[0])
 
             # 存储last_start_id
             if i == 1:

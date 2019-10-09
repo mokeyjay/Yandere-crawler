@@ -50,4 +50,5 @@ def get_info(dic):
     for ele in jlist:
         plist[i] = dic[ele]
         i += 1
+    plist[0] = str(plist[0])
     return plist
