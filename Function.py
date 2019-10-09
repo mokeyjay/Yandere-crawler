@@ -54,7 +54,7 @@ def exists(file_name: str):
 
 def char_replace(file_name):
     """
-    去除保留字符
+    去除特殊字符
     """
     chr_list = ('?', '\\', r'/', '*', ':', '<', '>', '|', '"')
     for chr in chr_list:
