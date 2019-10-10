@@ -1,0 +1,23 @@
+{
+    "start_page": 1,
+    "stop_page": 1,
+    "pic_type": 1,
+    "pic_ext": "jpg",
+    "pic_size": {
+        "min": {
+            "width": 0,
+            "height": 0,
+            "proportion": 0
+        },
+        "max": {
+            "width": 0,
+            "height": 0,
+            "proportion": 2
+        }
+    },
+    "last_stop_id": 578061,
+    "folder_path": "D:/Yandere/",
+    "random_delay": 1,
+    "safe_mode": 1,
+    "status_active_only": 1
+}
