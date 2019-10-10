@@ -76,7 +76,7 @@ while True:
             elif pic_type == 3 and width == height:
                 download = True
             else:
-                Log.add(info[0] + '图片比例不符，跳过')
+                Log.add(info[0] + '比例不符，跳过')
                 continue
             # 判断图片尺寸
             if width >= pic_size['min']['width'] and height >= pic_size['min']['height']:
@@ -91,7 +91,7 @@ while True:
             if proportion < pic_size['min']['proportion'] or (pic_size['max']['proportion'] and proportion > pic_size['max']['proportion']):
                 download = False
             if not download:
-                Log.add(info[0] + '图片尺寸不符，跳过')
+                Log.add(info[0] + '尺寸不符，跳过')
                 continue
 
             #图片分级
