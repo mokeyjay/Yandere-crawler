@@ -12,7 +12,7 @@ import Http
 import Log
 
 settings = Function.read_settings(Function.get('config.json'))
-# 开始页码，结束页码，图片比例，图片类型，图片尺寸{最小/最大像素：宽、高、宽高比，上次终止图片ID}
+# 开始页码，结束页码，图片比例，图片类型，图片尺寸{最小/最大像素：宽、高、宽高比，上次终止图片ID，保存路径，下载延迟、安全模式、争议过滤开/关}
 # 当前未进行图片类型筛选
 
 if input('使用默认设置/上次设置吗？若第一次使用则为默认设置，否则为上次设置：(y/n)') == 'n':
@@ -42,13 +42,13 @@ while True:
         # 获取每个li的内容
         for li in Yandere.get_li(json_data):
             i += 1
-            info = Yandere.get_info(li) # (id, size, ext, img_url, width, height)
-            width = info[4]
-            height = info[5]
+            info = Yandere.get_info(li) # (id, size, ext, img_url, rating, status, width, height, score)
+            width = info[6]
+            height = info[7]
 
             # 存储last_start_id
             if i == 1:
-                if len(info) == 6:
+                if len(info) == 9:
                     settings['last_stop_id'] = int(info[0])
                     Function.write('config.json', json.dumps(settings), True)
                 else:
@@ -56,7 +56,7 @@ while True:
                     exit()
 
             # 数据结构是否错误？
-            if len(info) != 6:
+            if len(info) != 9:
                 Log.add(str(i) + ' 错误，跳过')
                 continue
 
@@ -76,7 +76,7 @@ while True:
             elif pic_type == 3 and width == height:
                 download = True
             else:
-                Log.add('图片比例不符，跳过')
+                Log.add(info[0] + '图片比例不符，跳过')
                 continue
             # 判断图片尺寸
             if width >= pic_size['min']['width'] and height >= pic_size['min']['height']:
@@ -91,7 +91,20 @@ while True:
             if proportion < pic_size['min']['proportion'] or (pic_size['max']['proportion'] and proportion > pic_size['max']['proportion']):
                 download = False
             if not download:
-                Log.add('图片尺寸不符，跳过')
+                Log.add(info[0] + '图片尺寸不符，跳过')
+                continue
+
+            #图片分级
+            if info[4] != 'e' or not settings['safe_mode']:
+                download = True
+            else:
+                continue
+
+            #只下载可见图片
+            if info[5] == 'active' and settings['status_active_only']:
+                download = True
+            else:
+                print(info[0] + '审核中，跳过')
                 continue
 
             if download:
@@ -106,7 +119,7 @@ while True:
 
                 Log.add(str(i) + '. ' + datetime.datetime.now().strftime('%H:%M:%S') + ' 开始下载p' + info[0] + ' 大小' + str("%.2f" %(info[1]/1048576)) + 'M 类型' + info[2])
                 ts = time.time()
-                img = Http.get(info[3], {'Host': 'files.yande.re', 'Referer': 'https://yande.re/post/show/'+info[0]})
+                img = Http.get(info[3], {'Host': 'files.yande.re', 'Referer': 'https://yande.re/post/show/' + info[0]})
                 cost_time = int(time.time() - ts) # 秒级精度可能导致0秒
                 if cost_time:
                     aver_speed = info[1]/1024/cost_time

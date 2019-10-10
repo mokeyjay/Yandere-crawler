@@ -1,4 +1,3 @@
-import re
 import json
 import Http
 import Log
@@ -43,10 +42,11 @@ def get_info(dic):
     :return: list (id, size, ext, largeimg_url, width, height)
     """
     i = 0
-    plist = ['1', '2', '3', '4', '5', '6']
-    jlist = ['id', 'file_size', 'file_ext', 'file_url', 'width', 'height']
-    # id file_size width height 为 int : 0,1,4,5
-    # file_ext file_url 为 str : 2,3
+    plist = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+    jlist = ['id', 'file_size', 'file_ext', 'file_url', 'rating', 'status', 'width', 'height', 'score']
+    # id file_size width height score为 int : 0,1,6,7,8
+    # file_ext file_url rating status为 str : 2,3,4,5
+    # score项目未使用
     for ele in jlist:
         plist[i] = dic[ele]
         i += 1

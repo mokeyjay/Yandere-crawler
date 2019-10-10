@@ -94,6 +94,22 @@ def get_settings(settings: dict):
     settings['pic_size']['max']['width'] = int(input('最大宽度：'))
     settings['pic_size']['max']['height'] = int(input('最大高度：'))
     settings['pic_size']['max']['proportion'] = int(input('最大宽高比：'))
+
+    settings['folder_path'] = input('保存路径：')
+    delay_on = input('是否启用下载延迟？(y/n)')
+    if delay_on == 'n':
+        settings['random_delay'] = 0
+    else:
+        settings['random_delay'] = 1
+
+    settings['safe_mode'] = 1 # 强制安全浏览，不服打我呀
+
+    status = input('只下载无争议图片？(y/n)')
+    if status == 'n':
+        settings['status_active_only'] = 0
+    else:
+        settings['status_active_only'] = 1
+
     return settings
 
 
