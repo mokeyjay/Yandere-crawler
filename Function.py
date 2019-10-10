@@ -1,10 +1,13 @@
 import os.path
 import datetime
 import json
+import re
 
 # 图片存储位置
-_folder_name = 'K:/Yandere/'
-
+# _folder_name = 'K:/Yandere/'
+_find_content = open('config.json')
+_folder_name = "".join(re.compile(r'\"folder_path\": \"(\w.+?)\"').findall(_find_content.read()))
+_find_content.close()
 
 def create_folder():
     global _folder_name
@@ -95,8 +98,7 @@ def get_settings(settings: dict):
     settings['pic_size']['max']['height'] = int(input('最大高度：'))
     settings['pic_size']['max']['proportion'] = int(input('最大宽高比：'))
 
-    # settings['folder_path'] = input('保存路径：')
-    # 很遗憾该选项无效，手动改路径吧
+    settings['folder_path'] = input('保存路径，下一次启动生效：')
     delay_on = input('是否启用下载延迟？(y/n)')
     if delay_on == 'n':
         settings['random_delay'] = 0

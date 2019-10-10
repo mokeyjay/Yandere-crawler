@@ -76,7 +76,7 @@ while True:
             elif pic_type == 3 and width == height:
                 download = True
             else:
-                Log.add(info[0] + '比例不符，跳过')
+                Log.add(info[0] + ' 比例不符，跳过')
                 continue
             # 判断图片尺寸
             if width >= pic_size['min']['width'] and height >= pic_size['min']['height']:
@@ -91,10 +91,9 @@ while True:
             if proportion < pic_size['min']['proportion'] or (pic_size['max']['proportion'] and proportion > pic_size['max']['proportion']):
                 download = False
             if not download:
-                Log.add(info[0] + '尺寸不符，跳过')
+                Log.add(info[0] + ' 尺寸不符，跳过')
                 continue
 
-            #图片分级
             if info[4] != 'e' or not settings['safe_mode']:
                 download = True
             else:
@@ -104,7 +103,7 @@ while True:
             if info[5] == 'active' and settings['status_active_only']:
                 download = True
             else:
-                print(info[0] + '审核中，跳过')
+                Log.add(info[0] + '审核中，跳过')
                 continue
 
             if download:
@@ -134,6 +133,7 @@ while True:
                 Function.add('log_' + start_time + '.txt', Log.get())
                 Log.reset()
                 time.sleep(sleep_time)
+        Function.add('log_' + start_time + '.txt', Log.get())
 
         if end:
             break
