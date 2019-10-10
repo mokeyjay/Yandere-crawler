@@ -1,11 +1,13 @@
 ## Yande.re图片爬虫
 
-改造自https://github.com/mokeyjay/Yandere-crawler
+修改自https://github.com/mokeyjay/Yandere-crawler
 
 改动：
-1.使用json API, 比正则写起来舒服
+1.使用json API
 2.实时将日志输出至日志文件
-3.添加下载随机延时
+3.随机下载延时
+4.将设置保存到配置文件
 
 计划：
-1.将设置存放至独立文件
+1.按条件选择性下载
+2.按tag搜索
