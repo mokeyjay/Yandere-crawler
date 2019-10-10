@@ -6,18 +6,17 @@ import json
 import time
 import datetime
 import random
-import module_settings
 import Yandere
 import Function
 import Http
 import Log
 
-settings = module_settings.read_settings(Function.get('config.json'))
+settings = Function.read_settings(Function.get('config.json'))
 # 开始页码，结束页码，图片比例，图片类型，图片尺寸{最小/最大像素：宽、高、宽高比，上次终止图片ID}
 # 当前未进行图片类型筛选
 
 if input('使用默认设置/上次设置吗？若第一次使用则为默认设置，否则为上次设置：(y/n)') == 'n':
-    settings = module_settings.get_settings(settings)
+    settings = Function.get_settings(settings)
 
 page = settings['start_page']
 max_page = settings['stop_page']
