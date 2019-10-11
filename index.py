@@ -51,12 +51,8 @@ while True:
         # 获取页面内容
         Log.add('\n正在读取第'+str(page)+'页……')
         json_data = Yandere.get_json(page, tag_on, tags)
-        # 获取list
-        lis = Yandere.get_li(json_data)
-        if len(lis) < 40:
-            stop_when_end = True
         # 获取每个li的内容
-        for li in lis:
+        for li in Yandere.get_li(json_data):
             if li == '':
                 print('此页无内容')
                 break
