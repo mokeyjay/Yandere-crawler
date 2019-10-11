@@ -15,8 +15,11 @@
             "proportion": 2
         }
     },
+    "file_size_limit": 1,
+    "file_size": 15,
     "last_stop_id": 578061,
-    "folder_path": "D:/Yandere/",
+    "tagSearch_last_stop_id": 569282,
+    "folder_path": "K:/Yandere/",
     "random_delay": 1,
     "safe_mode": 1,
     "status_active_only": 1

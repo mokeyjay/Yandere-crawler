@@ -98,6 +98,13 @@ def get_settings(settings: dict):
     settings['pic_size']['max']['height'] = int(input('最大高度：'))
     settings['pic_size']['max']['proportion'] = int(input('最大宽高比：'))
 
+    size_limit = input('限制图片体积？(y/n)')
+    if size_limit == 'n':
+        settings['file_size_limit'] = 0
+    else:
+        settings['file_size_limit'] = 1
+        settings['file_size'] = int(input('最大文件体积，单位兆字节(MB)：')) * 1048576
+
     settings['folder_path'] = input('保存路径，下一次启动生效：')
     delay_on = input('是否启用下载延迟？(y/n)')
     if delay_on == 'n':
