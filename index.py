@@ -11,12 +11,21 @@ import Function
 import Http
 import Log
 
+tag_on = input('搜索tags？(y/n)')
+if tag_on != 'n':
+    print('请自行寻找有效tag，如:landscape\n多tag用法示范:landscape banishment')
+    tags = input('输入tags，多个tag以空格分隔，不支持排除tags：')
+    print('警告：改变tags后，爬取至上次停止图片时停止功能可能失效\n本次爬取图片标签：' + tags)
+    tags = tags.replace(' ', '+')
+
 settings = Function.read_settings(Function.get('config.json'))
-# 开始页码，结束页码，图片比例，图片类型，图片尺寸{最小/最大像素：宽、高、宽高比，上次终止图片ID，保存路径，下载延迟、安全模式、争议过滤开/关}
+# 开始页码，结束页码，图片比例，图片类型，图片尺寸{最小/最大像素：宽、高、宽高比，上次终止图片ID，保存路径，体积限制、下载延迟、安全模式、争议过滤开/关}
 # 当前未进行图片类型筛选
 
 if input('使用默认设置/上次设置吗？若第一次使用则为默认设置，否则为上次设置：(y/n)') == 'n':
     settings = Function.get_settings(settings)
+    # 写入设置
+    Function.write('config.json', json.dumps(settings), True)
 
 page = settings['start_page']
 max_page = settings['stop_page']
@@ -27,7 +36,10 @@ pic_size = settings['pic_size']
 Function.create_folder()
 
 start_time = str(int(time.time()))
-last_start_id = settings['last_stop_id']  # 上次开始爬取时第一张图片ID。爬到此ID则终止此次爬取
+if tag_on != 'n':
+    last_start_id = settings['last_stop_id']  # 上次开始爬取时第一张图片ID。爬到此ID则终止此次爬取
+else:
+    last_start_id = settings['tagSearch_last_start_id']
 Log.add('目标图片ID'+str(last_start_id))
 i = 0  # 当前第几张
 end = False  # 爬取是否已结束
@@ -38,34 +50,62 @@ while True:
     if max_page == 0 or page <= max_page:
         # 获取页面内容
         Log.add('\n正在读取第'+str(page)+'页……')
-        json_data = Yandere.get_json(page)
+        json_data = Yandere.get_json(page, tag_on, tags)
+        # 获取list
+        lis = Yandere.get_li(json_data)
+        if len(lis) < 40:
+            stop_when_end = True
         # 获取每个li的内容
-        for li in Yandere.get_li(json_data):
+        for li in lis:
+            if li == '':
+                print('此页无内容')
+                break
             i += 1
-            info = Yandere.get_info(li) # (id, size, ext, img_url, rating, status, width, height, score)
+            info = Yandere.get_info(li) # (id, size, ext, img_url, rating, status, width, height, score, jpeg_file_size, jpeg_url, jpeg_width, jpeg_height)
             width = info[6]
             height = info[7]
 
             # 存储last_start_id
             if i == 1:
-                if len(info) == 9:
-                    settings['last_stop_id'] = int(info[0])
+                if len(info) == 13:
+                    if tag_on != 'n':
+                        settings['last_stop_id'] = int(info[0])
+                    else:
+                        settings['tagSearch_last_stop_id'] = int(info[0])
                     Function.write('config.json', json.dumps(settings), True)
                 else:
                     # 第一张个li就出现了问题，这就无法存储last_start_id了
                     exit()
 
             # 数据结构是否错误？
-            if len(info) != 9:
+            if len(info) != 13:
                 Log.add(str(i) + ' 错误，跳过')
                 continue
 
             # 已经爬到上次开始爬的地方了 且 终止页码为0 本次爬取结束
-            if int(info[0]) == last_start_id and max_page == 0:
+            if int(info[0]) <= last_start_id and max_page == 0:
                 end = True
                 break
 
             download = False  # 是否下载此图？
+            
+            # 限制下载文件体积
+            if settings['file_size_limit']:
+                if info[9] > settings['file_size']:
+                    Log.add(info[0] + ' 体积超限，跳过')
+                    continue
+                else:
+                    if info[1] > settings['file_size']:
+                        Log.add(info[0] + '原图尺寸超限，获取最大压缩图片')
+                        info[1] = info[9]
+                        info[2] = 'jpg'
+                        width = info[11]
+                        height = info[12]
+                        info[3] = info[10]
+                    download = True
+            else:
+                download = True
+
             # 判断图片比例（不想写一长串……只好如此了）
             if pic_type == 0:
                 download = True
@@ -99,7 +139,7 @@ while True:
             else:
                 continue
 
-            #只下载可见图片
+            # 只下载可见图片
             if info[5] == 'active' and settings['status_active_only']:
                 download = True
             else:
