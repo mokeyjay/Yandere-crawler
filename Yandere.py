@@ -45,9 +45,9 @@ def get_info(dic):
     :return: list (id, size, ext, largeimg_url, width, height)
     """
     plist = []
-    jlist = ['id', 'file_size', 'file_ext', 'file_url', 'rating', 'status', 'width', 'height', 'score', 'jpeg_file_size', 'jpeg_url', 'jpeg_width', 'jpeg_height']
-    # id file_size width height score jpeg_file_size jpeg_width jpeg_height为 int : 0,1,6,7,8,9,11,12
-    # file_ext file_url rating status jpeg_url为 str : 2,3,4,5,10
+    jlist = ['id', 'tags', 'file_size', 'file_ext', 'file_url', 'rating', 'status', 'width', 'height', 'score', 'jpeg_file_size', 'jpeg_url', 'jpeg_width', 'jpeg_height']
+    # id file_size width height score jpeg_file_size jpeg_width jpeg_height为 int : 0,2,7,8,9,10,12,13
+    # tags file_ext file_url rating status jpeg_url为 str : 1,3,4,5,6,11
     # score项目未使用
     # score的forum说明：“受欢迎程度”
     for ele in jlist:
