@@ -1,44 +1,56 @@
-import re
+import json
 import Http
 import Log
 
 
-def get_html(page=1):
+def get_json(page, tag_on, tags):
     """
-    获取列表页的html源码
+    获取列表页的json数据
     :param page: 页码
     :type page: int
     :return: str
     """
-    url = 'https://yande.re/post.xml?page='+str(page)
-    html = Http.get(url)
-    if not html:
-        Log.add('抓取 ' + url + ' 失败')
+    if tag_on == 'n':
+        url = 'https://yande.re/post.json?page=' + str(page) #JSON API
+    else:
+        url = 'https://yande.re/post.json?tags=' + str(tags) + '&page=' + str(page)
+    json_data = Http.get(url)
+    if not json_data:
+        Log.add('请求 ' + url + ' 失败')
         exit()
 
     try:
-        html = html.decode('utf-8')
+        json_data = json_data.decode('utf-8')
     except:
         Log.add(url + ' 解码失败')
         exit(500)
-    return html
+    return json_data
 
 
-def get_li(html: str):
+def get_li(json_data: str):
     """
-    获取li源码列表
-    :param html: html源码
-    :type html: str
+    获取li数据列表
+    :param json: json数组
+    :type json: str
     :return: list
     """
-    return re.compile(r'<post id="\d{6}.+?"/>').findall(html)
+    return json.loads(json_data)
 
 
-def get_info(li):
+def get_info(dic):
     """
     获取详情。即id,largeimgurl,width,height
-    :param li: li的源码
-    :type li: str
-    :return: list (id, largeimg_url, width, height)
+    :param dic: json中单个post的数据
+    :type dic: dictionary
+    :return: list (id, size, ext, largeimg_url, width, height)
     """
-    return re.compile('post id="(\d+)" tags=".+?file_url="(.+?)".+?is_pending="\w+?" width="(\d+)" height="(\d+)".+?/>').findall(li)
+    plist = []
+    jlist = ['id', 'file_size', 'file_ext', 'file_url', 'rating', 'status', 'width', 'height', 'score', 'jpeg_file_size', 'jpeg_url', 'jpeg_width', 'jpeg_height']
+    # id file_size width height score jpeg_file_size jpeg_width jpeg_height为 int : 0,1,6,7,8,9,11,12
+    # file_ext file_url rating status jpeg_url为 str : 2,3,4,5,10
+    # score项目未使用
+    # score的forum说明：“受欢迎程度”
+    for ele in jlist:
+        plist.append(dic[ele])
+    plist[0] = str(plist[0])
+    return plist
