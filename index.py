@@ -182,6 +182,7 @@ while True:
                 Log.reset()
                 time.sleep(sleep_time)
         Function.add('log_' + start_time + '.txt', Log.get())
+        Log.reset()
 
         if end:
             break
