@@ -11,7 +11,7 @@ class window:
     def childFrame(self):
         left_descrb = ('开始页码', '结束页码', '终止ID', '下载体积限制', 'tag搜索终止ID')
         middle_descrb = ('最小宽度', '最小高度', '最小宽高比', '最大宽度', '最大高度', '最大宽高比')
-        switch_descrb = ('下载体积限制', 'tag搜索', '下载延迟', '跳过pending', '安全模式', '图片尺寸模糊判断')
+        switch_descrb = ('下载体积限制', 'tag搜索', '下载延迟', '跳过pending', '安全模式', '从文件读取配置')
         text_descrb = ('下载路径', '要搜索的tags', '要排除的tags')
         left_var = ('start_page', 'stop_page', 'last_stop_id', 'file_size', 'tagSearch_last_stop_id')
         switch_var = ('file_size_limit', 'tag_on', 'random_delay', 'status_active_only', 'safe_mode', 'fuzzy_judgment')
