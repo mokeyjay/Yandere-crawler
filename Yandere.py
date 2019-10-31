@@ -2,7 +2,7 @@ import json
 import Http
 import Log
 
-
+#基本上是json操作
 def get_json(page, tag_on, tags):
     """
     获取列表页的json数据
@@ -10,10 +10,10 @@ def get_json(page, tag_on, tags):
     :type page: int
     :return: str
     """
-    if tag_on == 'n':
-        url = 'https://yande.re/post.json?page=' + str(page) #JSON API
-    else:
+    if tag_on:
         url = 'https://yande.re/post.json?tags=' + str(tags) + '&page=' + str(page)
+    else:
+        url = 'https://yande.re/post.json?page=' + str(page) #JSON API
     json_data = Http.get(url)
     if not json_data:
         Log.add('请求 ' + url + ' 失败')
@@ -26,7 +26,6 @@ def get_json(page, tag_on, tags):
         exit(500)
     return json_data
 
-
 def get_li(json_data: str):
     """
     获取li数据列表
@@ -36,7 +35,10 @@ def get_li(json_data: str):
     """
     return json.loads(json_data)
 
+def return_json(settings: dict):
+    return json.dumps(settings)
 
+#已丢弃
 def get_info(dic):
     """
     获取详情。即id,largeimgurl,width,height
@@ -45,9 +47,9 @@ def get_info(dic):
     :return: list (id, size, ext, largeimg_url, width, height)
     """
     plist = []
-    jlist = ['id', 'file_size', 'file_ext', 'file_url', 'rating', 'status', 'width', 'height', 'score', 'jpeg_file_size', 'jpeg_url', 'jpeg_width', 'jpeg_height']
-    # id file_size width height score jpeg_file_size jpeg_width jpeg_height为 int : 0,1,6,7,8,9,11,12
-    # file_ext file_url rating status jpeg_url为 str : 2,3,4,5,10
+    jlist = ['id', 'tags', 'file_size', 'file_ext', 'file_url', 'rating', 'status', 'width', 'height', 'score', 'jpeg_file_size', 'jpeg_url', 'jpeg_width', 'jpeg_height']
+    # id file_size width height score jpeg_file_size jpeg_width jpeg_height为 int : 0,2,7,8,9,10,12,13
+    # tags file_ext file_url rating status jpeg_url为 str : 1,3,4,5,6,11
     # score项目未使用
     # score的forum说明：“受欢迎程度”
     for ele in jlist:

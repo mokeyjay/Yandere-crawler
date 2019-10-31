@@ -5,7 +5,9 @@
 
 感谢[@mokeyjay](https://github.com/mokeyjay)的[爬虫项目](https://github.com/mokeyjay/Yandere-crawler)节省了很多时间。
 
-本项目在`Win10`、`Python3.6.7`运行成功，其他环境不作考虑。
+(合并分支覆盖掉了原项目的Readme, 想办法补救中)
+
+本项目基于`Win7, Python3.5.2`开发，在`Win10, Python3.6.7`与`Ubuntu16.04, Python3.5.2`运行成功，其他环境不作考虑。
 
 ### 功能
 - 支持从指定的**开始页码**爬取到**结束页码**
@@ -15,12 +17,14 @@
 - 支持限制爬取的**图片体积**
 - 按照当天的日期创建目录并存放爬取的图片
 - 爬取结束后会在图片目录下生成日志文件
-- 支持tag搜索（实验性）
+- 支持tag搜索与排除
+- (可选)GUI
 
 ### 如何使用
 **可选** 
 
 编辑`config.json`中`folder_path`参数，设为自己想要的目录，如文件夹不存在将会自动创建。路径必须以斜杠结尾。
+剩下的参数可以运行后根据提示修改。
 
 Windows下命令行执行`python index.py`即可，Linux下可直接执行。
 
@@ -33,6 +37,5 @@ Windows下命令行执行`python index.py`即可，Linux下可直接执行。
 终于完成了啦
 
 ### 未来计划
-- GUI
-- 与[ExAPI](https://github.com/pavostudio/ExAPI)相容
-- 利用机器学习，根据旧有图片判断新图片是否受我喜欢并抛弃不喜欢图片（有生之年系列）
+- ~~与[ExAPI](https://github.com/pavostudio/ExAPI)相容~~
+- ~~基于机器学习的自动筛选(不识别图像了，识别标签吧)~~

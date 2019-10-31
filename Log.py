@@ -10,9 +10,7 @@ def add(msg: str):
     :return:
     """
     global _log_msg
-    _log_msg += msg + '\r'
-    print(msg)
-
+    _log_msg += msg + '\n'
 
 def get():
     """
@@ -21,6 +19,11 @@ def get():
     global _log_msg
     return _log_msg
 
+def output():
+    print(_log_msg)
+
+def g_output(container):
+    container.insert('end', _log_msg)
 
 def reset():
     """
