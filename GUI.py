@@ -20,8 +20,6 @@ class window:
         middle_descrb = ('最小宽度', '最小高度', '最小宽高比', '最大宽度', '最大高度', '最大宽高比')
         switch_descrb = ('下载体积限制', 'tag搜索', '下载延迟', '跳过pending', '安全模式', '从文件读取配置')
         text_descrb = ('下载路径', '要搜索的tags', '要排除的tags')
-        #left_var = ('start_page', 'stop_page', 'last_stop_id', 'file_size', 'tagSearch_last_stop_id')
-        #switch_var = ('file_size_limit', 'tag_on', 'random_delay', 'status_active_only', 'safe_mode', 'fuzzy_judgment')
         left_options = [] # len = 5
         middle_options = [] # len = 6
         switch_options = [] # len = 6
@@ -50,6 +48,11 @@ class window:
                 settings['pic_size']['max']['width'] = middle_var[3]
                 settings['pic_size']['max']['height'] = middle_var[4]
                 settings['pic_size']['max']['proportion'] = middle_var[5]
+
+                if not left_var[2]:
+                    settings['last_stop_id'] = left_var[2]
+                if not left_var[4]:
+                    settings['tagSearch_last_stop_id'] = left_var[4]
                 pic_type= middle_option.get()
                 if pic_type == '全部':
                     settings['pic_type'] = 0
@@ -155,7 +158,7 @@ class window:
         # 输出区
         output = scrolledtext.ScrolledText(self.container, width = 60, height = 12)
         output.grid(row = 3, columnspan = 3)
-        output.insert('end', 'tag搜索终止ID仅当tag搜索选项启用时生效\n')
+        output.insert('end', 'tag搜索终止ID仅当tag搜索选项启用时生效\n部分功能暂缺，可能会有错误\n点\"开始\"后窗口会无响应但是爬取功能确实在运行，后续考虑解决')
         output.see('end')
         output.update()
 
