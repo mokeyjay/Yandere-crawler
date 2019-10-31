@@ -107,19 +107,16 @@ def download(post, folder_path):
 
     Function.write(folder_path, file_name, img)
 
-def write_log(folder_path):
-    Function.add(folder_path, 'log_' + _start_time + '.txt', Log.get())
+def write_log(folder_path, start_time):
+    Function.add(folder_path, 'log_' + start_time + '.txt', Log.get())
     Log.reset()
 
-global _start_time
 
 if __name__ == "__main__":
     #获取设置
     settings = Yandere.get_li(Function.read('config.json'))
     if not switch_convert(input('使用上次设置? (y/n)')):
         input_settings(settings)
-        if switch_convert(input('存储本次设置? (y/n)')):
-            Function.write(settings['folder_path'], 'config.json', Yandere.return_json(settings), True)
         
     page = settings['start_page']
     stop_page = settings['stop_page']
@@ -127,7 +124,7 @@ if __name__ == "__main__":
     tag_on = settings['tag_search']
     folder_path = settings['folder_path'] + '/' + time.strftime('%Y%m%d')
     delay_on = settings['random_delay']
-    _start_time = time.strftime('%H-%M-%S')
+    start_time = time.strftime('%H-%M-%S')
 
     if tag_on:
         tags = input('tag搜索已启用，请输入要搜索的tags，多个tag以空格分隔：')
@@ -151,7 +148,8 @@ if __name__ == "__main__":
             data = Yandere.get_json(page, tag_on, tags)
             for post in Yandere.get_li(data):
                 if i == 1:
-                    last_stop_id = post['id']
+                    settings['last_stop_id'] = post['id']
+                    Function.write(settings['folder_path'], 'config.json', Yandere.return_json(settings), True)
                 if post['id'] <= last_stop_id and not stop_page:
                     end = True
                     break
@@ -159,9 +157,10 @@ if __name__ == "__main__":
                 if judge(post, settings, discard_tags):
                     download(post, folder_path)
                     if delay_on:
-                        time.sleep(random.uniform(0.5,10.0))
+                        time.sleep(random.uniform(0.5, 10.0))
                 Log.output()
-                write_log(folder_path)
+                write_log(folder_path, start_time)
+                i += 1
             if end:
                 break
             page += 1
