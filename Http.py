@@ -14,3 +14,6 @@ def get(url: str, header: list = {}):
     # Chrome76
     req = urllib.request.Request(url, headers=header)
     return urllib.request.urlopen(req).read()
+
+def decode(url: str):
+    return urllib.parse.unquote(url.split('/')[-1])
