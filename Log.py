@@ -1,5 +1,5 @@
 
-
+# 其实这个文件并没有被调用
 _log_msg = ''
 
 
@@ -20,10 +20,18 @@ def get():
     return _log_msg
 
 def output():
+    """
+    在终端输出日志
+    """
     print(_log_msg)
 
 def g_output(container):
+    """
+    在GUI的滚动文本框输出日志
+    :param container: 要插入文本信息的组件名称
+    """
     container.insert('end', _log_msg)
+    container.see('end')
 
 def reset():
     """

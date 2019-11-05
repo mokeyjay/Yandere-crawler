@@ -1,7 +1,7 @@
 {
     "start_page": 1,
     "stop_page": 1,
-    "pic_type": 1,
+    "pic_type": 0,
     "pic_size": {
         "min": {
             "width": 0,
@@ -16,11 +16,11 @@
     },
     "file_size_limit": 1,
     "file_size": 15728640,
-    "folder_path": "K:/Yandere",
-    "tag_search": 1,
+    "folder_path": "D:\\Yandere",
+    "tag_search": 0,
     "random_delay": 1,
     "safe_mode": 1,
-    "status_active_only": 1,
-    "last_stop_id": 584149,
-    "tagSearch_last_stop_id": 569282
+    "status_check": 1,
+    "last_stop_id": 586000,
+    "tagSearch_last_stop_id": 586000
 }
