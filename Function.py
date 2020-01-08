@@ -1,4 +1,6 @@
-import os.path
+import os
+import re
+
 
 def create_folder(folder_path):
     # 创建目录存放今天爬下来的图
@@ -8,6 +10,7 @@ def create_folder(folder_path):
     """
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
+
 
 def read(file_name: str):
     """
@@ -19,6 +22,7 @@ def read(file_name: str):
     data = file.read()
     file.close()
     return data
+
 
 def write(folder_path: str, file_name: str, data, root: bool = False):
     """
@@ -35,6 +39,7 @@ def write(folder_path: str, file_name: str, data, root: bool = False):
         data = str(data).encode()
     file.write(data)
     file.close()
+
 
 def add(folder_path: str, file_name: str, data, root: bool = False):
     """
@@ -53,14 +58,33 @@ def add(folder_path: str, file_name: str, data, root: bool = False):
     file.write(data)
     file.close()
 
-def exists(folder_path: str, file_name: str):
+
+def existing(folder_path: str):
     """
-    文件是否存在
+    检索指定文件夹下所有文件，用于判断是否已存在相同内容但名称不同的图片
     :param folder_path: 文件夹路径
-    :param file_name: 文件名
-    :return: bool
+    :return: dict
     """
-    return os.path.exists(folder_path + '/' + file_name)
+    # 遍历指定目录下所有文件，将生成器转换为字典便于检索
+    # for root, dirs, files in os.walk(folder_path, topdown = False):
+    #    gen_list = files
+    gen_list = os.listdir(folder_path)
+    gen_dict = {}
+    for elem in gen_list:
+        key = re.match('yande.re (\d+).+?', elem)
+        if key:
+            gen_dict[key.group(1)] = [elem, os.path.getsize(folder_path + os.sep + elem)]
+    return gen_dict
+
+
+def rename_file(folder_path: str, origin_file_name: str, new_file_name: str):
+    try:
+        os.rename(folder_path + os.sep + origin_file_name, folder_path + os.sep + new_file_name)
+    except FileNotFoundError:
+        print('发生异常：系统找不到{}'.format(origin_file_name))
+    except FileExistsError:
+        print('发生异常：更新文件名{}已存在'.format(new_file_name))
+
 
 def rename(file_name):
     """

@@ -1,4 +1,5 @@
 {
+    "task_mode": false,
     "start_page": 1,
     "stop_page": 1,
     "pic_type": 0,
@@ -14,13 +15,15 @@
             "proportion": 2
         }
     },
-    "file_size_limit": 1,
+    "file_size_limit": true,
     "file_size": 15728640,
     "folder_path": "D:\\Yandere",
-    "tag_search": 0,
-    "random_delay": 1,
-    "safe_mode": 1,
-    "status_check": 1,
+    "date_separate": true,
+    "tag_search": false,
+    "tags": "",
+    "discard_tags": "",
+    "safe_mode": true,
+    "status_check": true,
     "last_stop_id": 586000,
     "tagSearch_last_stop_id": 586000
 }
