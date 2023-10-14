@@ -319,7 +319,7 @@ class get_data:
             settings["stop_page"] = args.end
         if args.output_folder:
             settings["folder_path"] = args.output_folder
-        settings["thread_count"] = args.threads
+        # settings["thread_count"] = args.threads
         if args.ratio != "null":
             settings["filter"]["ratio"] = args.ratio
         pool_id = args.pool_id
