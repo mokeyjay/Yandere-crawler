@@ -12,6 +12,7 @@ def add(msg: str):
     global _log_msg
     _log_msg += msg + '\n'
 
+
 def get():
     """
     获取日志内容
@@ -19,11 +20,13 @@ def get():
     global _log_msg
     return _log_msg
 
+
 def output():
     """
     在终端输出日志
     """
     print(_log_msg)
+
 
 def g_output(container):
     """
@@ -32,6 +35,7 @@ def g_output(container):
     """
     container.insert('end', _log_msg)
     container.see('end')
+
 
 def reset():
     """
