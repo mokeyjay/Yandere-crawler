@@ -1,29 +1,29 @@
 {
-    "task_mode": false,
     "start_page": 1,
     "stop_page": 1,
-    "pic_type": 0,
-    "pic_size": {
-        "min": {
-            "width": 0,
-            "height": 0,
-            "proportion": 0
-        },
-        "max": {
-            "width": 0,
-            "height": 0,
-            "proportion": 2
-        }
-    },
-    "file_size_limit": true,
-    "file_size": 15728640,
     "folder_path": "D:\\Yandere",
-    "date_separate": true,
+    "date_separate": false,
     "tag_search": false,
     "tags": "",
     "discard_tags": "",
-    "safe_mode": true,
-    "status_check": true,
+    "thread_count": 2,
+    "random_delay": 1,
     "last_stop_id": 586000,
-    "tagSearch_last_stop_id": 586000
+    "tagSearch_last_stop_id": 586000,
+    "filter": {
+        "ratio": "all",
+        "pixel_limit": {
+            "min_width": 0,
+            "min_height": 0,
+            "min_proportion": 0,
+            "max_width": 0,
+            "max_height": 0,
+            "max_proportion": 0
+        },
+        "file_limit": 0,
+        "safe_mode": true,
+        "rating_check": false,
+        "rating": "e",
+        "status_check": true
+    }
 }

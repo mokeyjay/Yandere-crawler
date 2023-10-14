@@ -1,282 +1,444 @@
 #!/usr/bin/env python3
 
-import time
-import random
-import threading
-import queue
-import Http
-import Yandere
-import Function
+import logging
+import asyncio
+import argparse
+from time import time, strftime
+from json import loads, dumps
+from os import makedirs, listdir, rename
+from os.path import exists, join, splitext
+from aiofiles import open as aopen
+from aiohttp import ClientSession
+from Http import decode
+from Function import rename as frename
+from Http import asyncget, headers
+
+class shared_signals:
+    def __init__(self, thread_count: int = 2) -> None:
+        self.event_loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+        self.thread_count: int = thread_count
+        self.queue = asyncio.Queue(maxsize=80)  # 下载任务队列
+        self.qsize_low: asyncio.Event = asyncio.Event()  # 下载队列任务量不足的信号
+        self.task_clear = asyncio.Event()  # 抓取任务结束的信号，但下载任务可能仍在进行
+        self.write_queue = asyncio.Queue(maxsize=2*self.thread_count)  # 文件写入队列
 
 
-def switch_convert(status):
-    # 非大小写'y'输入均被判断为否定，包括回车
-    if status == 'y' or status == 'Y':
+# 异步文件写入函数，将output_folder从下载线程剥离
+async def write_worker(output_folder: str, write_queue: asyncio.Queue) -> None:
+    loop = asyncio.get_event_loop()
+    while True:
+        try:
+            filename, content = await asyncio.wait_for(write_queue.get(), timeout=1)
+            write_queue.task_done()
+            if filename is None:
+                write_queue.task_done()
+                break
+            async with aopen(join(output_folder, filename), 'wb') as f:
+                await f.write(content)
+        except asyncio.TimeoutError:
+            atask_count = len(asyncio.all_tasks(loop))
+            if atask_count <= 2:  # 主线程+自身
+                break
+
+
+class api_crawler:
+    def __init__(self) -> None:
+        self.local_fdict: dict[int, str] = {}
+        self.output_folder: str = None
+        self.session: ClientSession = None
+        self.payload: list[dict] = []
+
+    def _init_local_flist(self) -> None:
+        if self.output_folder is None:
+            return
+        # 生成输出文件夹下所有符合指定命名规则的文件列表，以id-文件名为键值对的字典形式存储
+        # 基于以下前提：Y站不会修改文件命名规则；已张贴的post其二进制文件不会被修改(二进制文件内容，大小、扩展名)，只有tags被修改。
+        # 若文件命名规则发生变化，则此函数需要更新
+        for file in listdir(self.output_folder):
+            # if key := match(r"yande.re (\d+).+?", file): # 正则
+            #     self.__fdict[key[1]] = file
+            if file[:9] == "yande.re ":  # 字符串分割
+                index_space = 9 + file[9:].find(' ')  # 第二个空格前为id
+                # 如果不需要随tags变化更新文件名，可以考虑使用集合计算
+                self.local_fdict[int(file[9:index_space])] = file
+
+    # 空功能，在post_crawler中有具体功能，在pool_crawler中为无条件通过
+    def _post_filter(self, post: dict) -> bool:
         return True
-    else:
+
+    async def close(self) -> None:
+        await self.session.close()
+
+    async def next_page(self) -> bool:
         return False
 
+    async def get_data(self, url) -> None:
+        # 从json接口获取posts并序列化，若未出错则返回posts列表，否则返回None对象。错误处理在主函数中进行
+        if self.session is None:
+            self.session = ClientSession(headers=headers)
+        response, _ = await asyncget(self.session, url)
+        if response is None:
+            logging.error(f'请求失败: {url}')
+            return None
+        try:
+            json_data = response.decode('utf-8')
+            return loads(json_data)
+        except UnicodeDecodeError:
+            logging.error(f'解码失败: {url}')
+            return None
 
-def compare(width, height):
-    # 懒得写一串选项判断
-    if width > height:
-        return 1
-    elif width < height:
-        return 2
-    else:
-        return 3
+    async def _get_post_without_filter(self) -> dict | None:
+        if not self.payload and not await self.next_page():
+            return None
+        return self.payload.pop(0)
 
-
-def input_settings(settings: dict):
-    settings['start_page'] = int(input('开始页码：'))
-    settings['stop_page'] = int(input('停止页码，为0时爬取至上次终止图片，非0时爬完此页即停止：'))
-    settings['pic_type'] = int(input('图片比例，0=全部 1=横图 2=竖图 3=正方形：'))
-    settings['folder_path'] = input('保存路径：')
-    settings['tag_search'] = switch_convert(input('启用tag搜索? (y/n)'))
-    return settings
-
-
-def judge(post, settings, discard_tags):
-    # pending判断
-    # 发现其他状态类型，将判断条件从“仅active”改为“排除pending”
-    if settings['status_check']:
-        if post['status'] == 'pending':
-            add_log('{} is {}，跳过。原因：{}'.format(post['id'], post['status'], post['flag_detail']['reason']))
-            return False
-    # 分级判断
-    if settings['safe_mode']:
-        if post['rating'] == 'e':
-            return False
-    # 排除tag判断
-    if settings['tag_search']:
-        if list(set(discard_tags).intersection(set(post['tags'].strip(' ').split(' ')))):
-            add_log(post['id'] + ' 包含待排除tags，跳过')
-            return False
-    # 文件体积判断
-    if settings['file_size_limit']:
-        if post['file_size'] > settings['file_size']:
-            add_log(post['id'] + ' 超过体积限制，跳过')
-            return False
-    # 图片比例判断
-    # 由于预览图经过压缩，因此判断预览图尺寸会比原图多出一点冗余
-    if settings['pic_type']:
-        if not (settings['pic_type'] == compare(post['preview_width'], post['preview_height'])):
-            add_log(post['id'] + ' 比例不符，跳过')
-            return False
-    # 图片宽高比判断
-    proportion = post['preview_width'] / post['preview_height']
-    pic_size = settings['pic_size']
-    if proportion < pic_size['min']['proportion'] or (pic_size['max']['proportion'] and proportion > pic_size['max']['proportion']):
-        add_log(post['id'] + ' 宽高比不符，跳过')
-    # 图片尺寸判断
-    width = post['width']
-    height = post['height']
-    if width < pic_size['min']['width'] or height < pic_size['min']['height']:
-        add_log(post['id'] + ' 小于最小尺寸要求，跳过')
-        return False
-    else:
-        if (pic_size['max']['width'] and width > pic_size['max']['width']) or (pic_size['max']['height'] and height > pic_size['max']['height']):
-            add_log(post['id'] + ' 大于最大尺寸限制，跳过')
-            return False
-    #下载判断
-    # 获取文件名并解码
-    file_name = Function.rename(Http.decode(post['file_url']))
-    # 文件是否已存在？
-    # 尝试读取以id:[文件名,大小]为键值对的存放保存目录下所有符合指定命名规则的图片的字典
-    # 基于以下前提：Y站不会修改文件命名规则；已张贴的post其二进制文件不会被修改(二进制文件内容，大小、扩展名)，只有tags被修改。大小检查用于修正因意外导致的下载错误。
-    if post['id'] in exist_files_dict:
-        if exist_files_dict[post['id']][1] == post['file_size']:
-            if exist_files_dict[post['id']][0] == file_name:
-                add_log(post['id'] + ' 已存在，跳过')
+    async def get_post(self) -> dict | None:
+        if not self.payload:
+            return None
+        while post := await self._get_post_without_filter():
+            post_id = post["id"]
+            exist_file_name, file_name = self.local_fdict.get(post_id), frename(decode(post['file_url']))  # 删除非法字符
+            if exist_file_name is None:
+                post["file_name"] = file_name
+                if self._post_filter(post):
+                    return post
+            elif exist_file_name == file_name:
+                logging.info(f"{post_id} 已存在，跳过")
             else:
-                Function.rename_file(folder_path, exist_files_dict[post['id']][0], file_name)
-                add_log(post['id'] + ' tags变化，重命名原始文件')
-            return False
+                logging.info(f"{post_id} 已存在但tags有变化。重命名原文件，跳过下载")
+                rename(join(self.output_folder, exist_file_name), join(self.output_folder, file_name))
+        return None
+
+
+class pool_crawler(api_crawler):
+    def __init__(self, settings: dict, pool_id: int) -> None:
+        super().__init__()
+        self.pool_id: int = pool_id
+        self.flag_not_end: bool = True
+        self._init_settings(settings)
+        self._init_local_flist()
+
+    def _init_settings(self, settings: dict) -> None:
+        # 实例化此对象即意味着运行在pool下载模式下，除输出文件夹以外的设置项都将被忽略
+        self.output_folder = join(settings["folder_path"], str(self.pool_id))
+        if not exists(self.output_folder):
+            makedirs(self.output_folder)
+
+    async def get_page(self) -> dict | None:
+        logging.warning(f"正在读取pool: {self.pool_id}")
+        return await self.get_data(f"https://yande.re/pool/show.json?id={self.pool_id}")
+
+    async def next_page(self) -> bool:
+        if self.flag_not_end:
+            posts = await self.get_page()
+            if posts:
+                self.payload.extend(posts["posts"])
+                self.flag_not_end = False
+        return self.flag_not_end
+
+
+# 封装请求posts的功能，使按页抓取和按pool抓取的对外行为一致，简化主线程逻辑
+# 初始化logger句柄的功能也在这里，避免处理输出文件夹的问题
+class post_crawler(api_crawler):
+    def __init__(self, settings: dict) -> None:
+        super().__init__()
+        self.page: int = 0
+        self.start_page: int = 0
+        self.stop_page: int = -1
+        self._filter: dict = settings["filter"]
+        self.flag_tag_search: bool = False
+        self.tags: set[str] = {}
+        self.discard_tags: set[str] = {}
+        self.tags_str: str = ''
+        self.flag_not_end: bool = True
+        self._init_settings(settings)
+        self._init_local_flist()
+
+    def _init_settings(self, settings: dict) -> None:
+        # 实例化此对象即意味着并非运行在pool下载模式下
+        if settings["tag_search"]:
+            tags = settings["tags"]
+            if not tags:
+                return None
+            self.tags = set(tags.split(' '))
+            self.tag_str = tags.replace(' ', '+')
+            self.discard_tags = set() if settings["discard_tags"] else set(
+                settings["discard_tags"].split(' '))
+            self.output_folder = join(settings["folder_path"], tags)
+            self.flag_tag_search = True
+        elif settings["date_separate"]:
+            self.output_folder = join(settings["folder_path"], strftime('%Y%m%d'))
         else:
-            print('发现文件更新：{}'.format(post['id']))
+            self.output_folder = settings["folder_path"]
+        if not exists(self.output_folder):
+            makedirs(self.output_folder)
+        self.start_page = settings["start_page"]
+        self.stop_page = settings["stop_page"]
+
+    def _post_filter(self, post: dict) -> bool:  # TODO: 分析各条件使用频率，重排序
+        # pending判断
+        # 发现其他状态类型，将判断条件从“仅active”改为“排除pending”
+        if self._filter["status_check"] and post["status"] == 'pending':
+            logging.info(f"{post['id']} is {post['status']}，跳过。原因：{post['flag_detail']['reason']}")
+            return False
+        # 分级判断, safe, questionable, explicit
+        if self._filter["safe_mode"] and post["rating"] == 'e':
+            return False
+        # 排除tag判断
+        if self.flag_tag_search and self.discard_tags & set(post["tags"]):
+            logging.info(f"{post['id']} 包含待排除tags，跳过")
+            return False
+        # 文件体积判断
+        if 0 < self._filter["file_limit"] < post["file_size"]:
+            logging.info(f"{post['id']} 超过体积限制，跳过")
+            return False
+        # 图片比例判断(粗略)
+        # 由于预览图经过压缩，因此判断预览图尺寸会比原图多出一点冗余
+        if self._filter["ratio"] != "all":
+            matched = False
+            if self._filter["ratio"] == "horizontal" and not post["preview_width"] > post["preview_height"]:
+                matched = True
+            if self._filter["ratio"] == "vertical" and not post["preview_width"] < post["preview_height"]:
+                matched = True
+            if self._filter["ratio"] == "square" and post["preview_width"] != post["preview_height"]:
+                matched = True
+            if matched:
+                logging.info(f"{post['id']} 比例不符，跳过")
+                return False
+        # 图片宽高比判断(精确)
+        proportion = post["preview_width"] / post["preview_height"]
+        pixel_limit = self._filter["pixel_limit"]
+        if 0 < pixel_limit["max_proportion"] < proportion or proportion < pixel_limit["min_proportion"]:
+            logging.info(f"{post['id']} 宽高比不符，跳过")
+            return False
+        # 图片尺寸判断，只判断原图(或大图)尺寸
+        if pixel_limit["min_width"] > post["width"]:
+            logging.info(f"{post['id']}宽度小于下限，跳过")
+            return False
+        if 0 < pixel_limit["max_width"] < post["width"]:
+            logging.info(f"{post['id']}宽度大于上限，跳过")
+            return False
+        if pixel_limit["min_height"] > post["height"]:
+            logging.info(f"{post['id']}高度小于下限，跳过")
+            return False
+        if 0 < pixel_limit["max_height"] < post["height"]:
+            logging.info(f"{post['id']}高度大于上限，跳过")
+            return False
+        # 所有条件满足
+        return True
+
+    async def get_page(self) -> list | None:
+        logging.warning(f"正在读取第{self.page}页……")
+        url = f"https://yande.re/post.json?tags={self.tags_str}&page={self.page}" if self.flag_tag_search else f"https://yande.re/post.json?page={self.page}"
+        return await self.get_data(url)
+
+    async def next_page(self) -> bool:
+        if self.stop_page > -1 and self.page > self.stop_page:
+            self.flag_not_end = False
+            return False
+        posts = await self.get_page()
+        if posts:
+            self.payload.extend(posts)
+            self.page += 1
+        else:
+            self.flag_not_end = False
+        return self.flag_not_end
 
 
-    # 所有条件满足
-    return True
+def init_logger(log_level: str = "info", log_file: str = None) -> None:
+    logger = logging.getLogger()
+    logger.setLevel(log_level)
+    formatter = logging.Formatter("%(message)s", "%H:%M:%S")
+    # StreamHandler输出到屏幕
+    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    if log_file:
+        # FileHandler输出到文件
+        fh = logging.FileHandler(log_file)
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
 
 
-def download(post):
-    file_name = Function.rename(Http.decode(post['file_url']))
-    add_log('{} 开始下载p{} 大小{}M 类型{}'.format(time.strftime('%H:%M:%S'), post['id'], "%.2f" % (post['file_size'] / 1048576), post['file_ext']))
-    ts = time.time()
-    img = Http.get(post['file_url'], {'Host': 'files.yande.re', 'Referer': 'https://yande.re/post/show/' + post['id']})
-    cost_time = time.time() - ts
-    add_log('{}下载完毕，耗时{}s，平均速度{}k/s'.format(post['id'], "%.2f" %cost_time, "%.2f" % (post['file_size'] / 1024 / cost_time)))
-    Function.write(folder_path, file_name, img)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--start', type=int, default=-1, help='开始页码')
+    parser.add_argument('-e', '--end', type=int, default=-1, help='结束页码')
+    parser.add_argument('-o', '--output_folder', type=str, default='', help='保存路径')
+    parser.add_argument('-t', '--threads', type=int, default=-1, help='并行下载线程数，不是分段并行下载')
+    parser.add_argument('-l', '--log', type=str, default='info', help='日志等级')
+    # parser.add_argument('-d', '--debug', action='store_true', help='调试模式')
+    # parser.add_argument('-r', '--retry', type=int, default=10, help='http请求失败时的重试次数，达到重试次数上限后不再创建新任务')
+    parser.add_argument('--pool_id', type=int, default=0, help='按pool下载post，如果指定pool id，则忽略除输出文件夹和下载线程数外的其他参数')
+    parser.add_argument('--ratio', type=str, default="null", help='图片比例，all=全部, horizontal=横图, vertical=竖图, square=方形')
+    # parser.add_argument('--tags', type=str, default='', help='按tags搜索，设置此参数时将自动运行在tags搜索模式')
+    # parser.add_argument('--discard_tags', type=str, default='', help='要排除的tags，仅在tags搜索模式下生效')
+    return parser.parse_args()
 
 
-def add_log(content):
-    # 给输出加锁。避免文件写入冲突与UI输出异常。
-    log_lock.acquire()
-    print(content)
-    # 因为没有错误处理所以要将日志立刻写入文件防止丢失
-    Function.add(folder_path, log_file_name, content + '\n')
-    log_lock.release()
-
-
-def main(settings: dict, tags: str, discard_tags: str):
-    global log_file_name
-    global folder_path
-    global log_lock
-    global exist_files_dict
-    end = threading.Event()
-    data = queue.Queue(80)
-    log_lock = threading.Lock()
-    lock = threading.Condition()
-    log_file_name = 'log_{}.txt'.format(time.strftime('%Y%m%d-%H%M%S'))
-    if settings['tag_search']:
-        folder_path = settings['folder_path'] + '/' + tags
-    elif settings['date_separate']:
-        folder_path = settings['folder_path'] + '/' + time.strftime('%Y%m%d')
-        log_file_name = 'log_{}.txt'.format(time.strftime('%H%M%S'))
-    else:
-        folder_path = settings['folder_path']
-    Function.create_folder(folder_path)
-    # 遍历文件存放目录，获取所有已有文件名。不检索子目录。
-    exist_files_dict = Function.existing(folder_path)
-    # 将排除tags转换为列表
-    discard_tags = discard_tags.strip(' ').split(' ')
-    # 将易读的空格分隔转换为加号分隔，urllib无法处理空格，会报错
-    tags = tags.replace(' ', '+')
-
-    # 建立线程
-    # 只启用了单线程，低内存设备不建议启用多线程
-    get_data(lock, data, end, settings, tags, discard_tags)
-    parallel_task(lock, data, end, settings).join()
-
-
-# 子线程共用类
-class task_thread(threading.Thread):
-    def __init__(self, lock, queue, event, settings):
-        threading.Thread.__init__(self)
-        self.daemon = True
-        self.lock = lock
-        self.queue = queue
-        self.event = event
-        self.settings = settings
-        self.start()
+def main() -> None:
+    # 创建协程任务池
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    # 读取命令行参数
+    args = parse_args()
+    # 读取配置文件
+    with open('config.json', 'r', encoding='utf-8') as f:
+        settings = loads(f.read())
+    # 创建队列及信号量
+    if args.threads > 0:
+        settings["thread_count"] = args.threads
+    signals = shared_signals(settings["thread_count"])
+    # 创建主线程
+    crawler_thread = get_data(settings, signals, args)
+    if crawler_thread.can_run():
+        for task in [parallel_task(signals) for _ in range(crawler_thread.settings["thread_count"])]:
+            loop.create_task(task.run())
+        loop.create_task(write_worker(
+            crawler_thread.crawler.output_folder, signals.write_queue))
+        loop.run_until_complete(crawler_thread.run())
 
 
 # 生产者线程：抓取页面，将post元素补充入data队列
-class get_data(task_thread):
-    def __init__(self, lock, queue, event, settings, tags, discard_tags):
-        task_thread.__init__(self, lock, queue, event, settings)
-        self.tags = tags
-        self.discard_tags = discard_tags
-    def run(self):
-        lock = self.lock
-        data = self.queue
-        end = self.event
-        settings = self.settings
-        tag_on = settings['tag_search']
-        page = settings['start_page']
-        stop_page = settings['stop_page']
-        if tag_on:
-            last_stop_id = settings['tagSearch_last_stop_id']
-        else:
-            last_stop_id = settings['last_stop_id']
-        while not end.is_set():
-            with lock:
-                if data.qsize() < 20:
-                    if page <= stop_page or not stop_page:
-                        add_log('正在读取第{}页……'.format(str(page)))
-                        origin = Yandere.get_li(Yandere.get_json(page, tag_on, self.tags))
-                        if len(origin):
-                            if page == settings['start_page']:
-                                post = origin[0]
-                                if post['id'] > last_stop_id:  # 考虑开始页不是第一页的情况
-                                    if tag_on:
-                                        settings['tagSearch_last_stop_id'] = post['id']
-                                    else:
-                                        settings['last_stop_id'] = post['id']
-                                Function.write(settings['folder_path'], 'config.json', Yandere.return_json(settings), True)  # 我超尖欸
-                                if tag_on:
-                                    settings['tagSearch_last_stop_id'] = last_stop_id
-                                else:
-                                    settings['last_stop_id'] = last_stop_id
-                            for post in origin:
-                                if post['id'] <= last_stop_id:
-                                    add_log('达到上次爬取终止位置')
-                                    end.set()
-                                    break
-                                post['id'] = str(post['id'])
-                                if judge(post, settings, self.discard_tags):
-                                    data.put(post)
-                            page += 1
-                            lock.notify(1)
-                        else:
-                            end.set()
-                            lock.notify_all()
-                            add_log('页面为空\n所有页面读取完毕')
-                    else:
-                        end.set()
-                else:
-                    lock.wait()
+class get_data:
+    def __init__(self, settings: dict, signals: shared_signals, args: argparse.Namespace = None) -> None:
+        self.settings: dict = settings
+        self.queue: asyncio.Queue = signals.queue
+        self.qsize_low: asyncio.Event = signals.qsize_low
+        self.task_clear: asyncio.Event = signals.task_clear
+        self.crawler: post_crawler | pool_crawler = None
+        self.mode: str = "pages"  # pages, tags, pool
+        self.last_stop_id: int = 0
+        self.latest_post_id: int = 0
+        self._init(settings, args)
 
-
-# 消费者线程：从data队列获取post并根据条件筛选，满足条件执行下载
-class parallel_task(task_thread):
-    def run(self):
-        lock = self.lock
-        data = self.queue
-        end = self.event
-        settings = self.settings
-        stop_page = settings['stop_page']
-        if settings['tag_search']:
-            last_stop_id = settings['tagSearch_last_stop_id']
+    def _init(self, settings: dict, args: argparse.Namespace = None) -> None:
+        if args.start > -1:
+            settings["start_page"] = args.start
+        if args.end > -1:
+            settings["stop_page"] = args.end
+        if args.output_folder:
+            settings["folder_path"] = args.output_folder
+        settings["thread_count"] = args.threads
+        if args.ratio != "null":
+            settings["filter"]["ratio"] = args.ratio
+        pool_id = args.pool_id
+        if pool_id > 0:
+            self.mode = "pool"
+            self.crawler = pool_crawler(settings, pool_id)
         else:
-            last_stop_id = settings['last_stop_id']
+            self.crawler = post_crawler(settings)
+        if not self.crawler.output_folder:
+            return
+        init_logger(args.log.upper(), join(self.crawler.output_folder, f"log_{strftime('%Y-%m-%d %H-%M-%S')}.txt"))
+        if self.mode == "pages":
+            self.last_stop_id = settings["last_stop_id"]
+        elif self.mode == "tags":
+            self.last_stop_id = settings["tagSearch_last_stop_id"]
+
+    def can_run(self) -> bool:
+        return bool(self.crawler.output_folder)
+
+    async def run(self):
+        queue_put_count = 0
+        await self.crawler.next_page()
         while True:
-            if lock.acquire():
-                if data.qsize():
-                    post = data.get(0)
-                    data.task_done()
-                    lock.notify(1)
-                    if int(post['id']) <= last_stop_id and not stop_page:
-                        # 达到上次爬取位置，跳出循环
-                        add_log('达到上次爬取终止位置')
-                        end.set()
-                        lock.notify_all()
-                        lock.release()
-                        break
-                    else:
-                        lock.release()
-                    download(post)
-                    # 两次下载间随机间隔，虽然不觉得有啥用
-                    time.sleep(random.uniform(0.5, 10.0))
-                    continue
-                else:
-                    if end.is_set():
-                        lock.notify_all()
-                        lock.release()
-                        break
-                    else:
-                        lock.wait()
-                lock.release()
+            post = await self.crawler.get_post()
+            if post is None:
+                break
+            post_id = post["id"]
+            logging.info(f"待下载的post: {post_id}")
+            if self.latest_post_id == 0:
+                self.latest_post_id = post_id
+                if self.mode == "pages":
+                    self.settings["last_stop_id"] = (post_id if self.crawler.start_page > 1 else max(self.settings["last_stop_id"], post_id))
+                elif self.mode == "tags":
+                    self.settings["tagSearch_last_stop_id"] = post_id
+            if self.mode != "pool" and post_id <= self.last_stop_id:
+                logging.warning("达到上次爬取终止位置")
+                break
+            # post过滤器，按条件判断是否应该下载
+            await self.queue.put({"id": post_id, "url": post["file_url"], "size": post["file_size"], "fname": post["file_name"], "fext": post.get("file_ext", splitext(post["file_name"])[1][1:])})
+            queue_put_count += 1
+            logging.debug(f"{post_id} 已添加到队列")
+            if queue_put_count > 30 or len(self.crawler.payload) < 10:
+                await self.qsize_low.wait()  # 等待下载线程通知队列中任务量不足
+                self.qsize_low.clear()
+                flag_not_end = await self.crawler.next_page()
+                if not flag_not_end and not self.task_clear.is_set():
+                    self.task_clear.set()  # 通知下载线程无可用任务
+                    logging.info("所有抓取任务已完成")
+                queue_put_count = 0
+        logging.info("抓取线程主循环结束")
+        if not self.task_clear.is_set():
+            self.task_clear.set()
+        await self.crawler.close()
+        # if not self.task_clear.is_set():
+        #     self.task_clear.set()  # 写入终止标志
+        loop = asyncio.get_event_loop()
+        while atask_count := len(asyncio.all_tasks(loop)):
+            logging.info(f"{atask_count}个线程仍在运行")
+            await asyncio.sleep(5)
+            if atask_count <= 1:  # 等待其他线程退出
+                break
+        if self.mode != "pool":
+            async with aopen('config.json', 'w', encoding='utf-8') as f:
+                await f.write(dumps(self.settings, indent=4, ensure_ascii=False))
+        logging.info("抓取线程退出")
+
+
+# 消费者线程：从data队列获取post并执行下载
+class parallel_task:
+    def __init__(self, signals: shared_signals) -> None:
+        self.queue: asyncio.Queue = signals.queue
+        self.qsize_low: asyncio.Event = signals.qsize_low
+        self.task_clear: asyncio.Event = signals.task_clear
+        self.file_write_queue: asyncio.Queue = signals.write_queue
+        self.session: ClientSession = None
+        self.total_file_size = 0
+
+    async def _download(self, post) -> None:
+        if self.session is None:
+            self.session = ClientSession(headers=headers)
+        logging.info(f"{strftime('%H:%M:%S')} 开始下载p{post['id']} 大小{post['size'] / 1048576:.2f}M 类型{post['fext']}")
+        ts = time()
+        img, size = await asyncget(self.session, post['url'], special_headers={'Host': 'files.yande.re', 'Referer': f"https://yande.re/post/show/{post['id']}"})
+        if img is None:
+            logging.error(f"{post['id']}下载失败")
+            return
+        cost_time = time() - ts
+        self.total_file_size += size
+        logging.info(f"{post['id']}下载完毕，耗时{cost_time:.2f}s，平均速度{post['size'] / (cost_time * 1024):.2f}k/s")
+        self.total_file_size += post['size']
+        await self.file_write_queue.put((post['fname'], img))
+
+    async def _main_loop(self):
+        while True:
+            try:
+                post = await asyncio.wait_for(self.queue.get(), timeout=5)
+                self.queue.task_done()
+            except asyncio.TimeoutError:
+                logging.debug("下载线程正在等待")
+                if self.task_clear.is_set():
+                    logging.debug("无可用下载任务，下载线程准备退出")
+                    if self.session is not None:
+                        await self.session.close()
+                    return
+                continue
+            if self.total_file_size > 1073741824:  # 每下载1G刷新session
+                await self.session.close()
+                self.session = ClientSession(headers=headers)
+            if self.queue.qsize() < 10 and not self.qsize_low.is_set():
+                self.qsize_low.set()  # 通知生产者线程队列中任务不足
+            await self._download(post)
+            # 两次下载间随机间隔，高频访问会被暂时阻止连接
+            # 生产者线程更新数据库时建议启用
+            # await asyncio.sleep(uniform(0.5, 10.0))
+
+    async def run(self):
+        await self._main_loop()
+        logging.info("下载线程退出")
 
 
 if __name__ == "__main__":
-    # 获取设置
-    settings = Yandere.get_li(Function.read('config.json'))
-    # 为定时任务做出修改，条件为真时跳过输入设置直接开始下载
-    if settings['task_mode']:
-        tags = settings['tags']
-        discard_tags = settings['discard_tags']
-    else:
-        if not switch_convert(input('使用上次设置? (y/n)')):
-            input_settings(settings)
-        if settings['tag_search']:
-            tags = input('tag搜索已启用，请输入要搜索的tags，多个tag以空格分隔：')
-            discard_tags = input('要排除的tags，多个tag以空格分隔, 不排除则按回车跳过：')
-            print('警告：改变tags后，爬取至上次停止图片时停止功能可能失效\n本次爬取图片标签：' + tags + '\n本次排除标签：' + discard_tags)
-        else:
-            tags = ''
-            discard_tags = ''
-
-    # 开始运行
-    main(settings, tags, discard_tags)
+    main()

@@ -92,7 +92,7 @@ def rename(file_name):
     :type file_name: str
     :return: str
     """
-    chr_list = ('?', '\\', r'/', '*', ':', '<', '>', '|', '"')
-    for chr in chr_list:
-        file_name = file_name.replace(chr, '')
+    chr_list = r'[\\/:*?"<>|]'
+    for char in chr_list:
+        file_name = file_name.replace(char, '')
     return file_name
