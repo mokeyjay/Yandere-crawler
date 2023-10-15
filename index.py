@@ -13,19 +13,20 @@ from Http import decode
 from Function import rename as frename
 from Http import asyncget, headers
 
+
 class shared_signals:
     def __init__(self, thread_count: int = 2) -> None:
         self.event_loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.thread_count: int = thread_count
-        self.queue = asyncio.Queue(maxsize=80)  # 下载任务队列
+        self.queue: asyncio.Queue = asyncio.Queue(maxsize=80)  # 下载任务队列
         self.qsize_low: asyncio.Event = asyncio.Event()  # 下载队列任务量不足的信号
-        self.task_clear = asyncio.Event()  # 抓取任务结束的信号，但下载任务可能仍在进行
-        self.write_queue = asyncio.Queue(maxsize=2*self.thread_count)  # 文件写入队列
+        self.task_clear: asyncio.Event = asyncio.Event()  # 抓取任务结束的信号，但下载任务可能仍在进行
+        self.write_queue: asyncio.Queue = asyncio.Queue(maxsize=2*self.thread_count)  # 文件写入队列
 
 
 # 异步文件写入函数，将output_folder从下载线程剥离
-async def write_worker(output_folder: str, write_queue: asyncio.Queue) -> None:
-    loop = asyncio.get_event_loop()
+async def write_worker(output_folder: str, signals: shared_signals) -> None:
+    loop, write_queue, task_clear = asyncio.get_event_loop(), signals.write_queue, signals.task_clear
     while True:
         try:
             filename, content = await asyncio.wait_for(write_queue.get(), timeout=1)
@@ -36,13 +37,20 @@ async def write_worker(output_folder: str, write_queue: asyncio.Queue) -> None:
             async with aopen(join(output_folder, filename), 'wb') as f:
                 await f.write(content)
         except asyncio.TimeoutError:
-            atask_count = len(asyncio.all_tasks(loop))
-            if atask_count <= 2:  # 主线程+自身
+            if task_clear.is_set() and len(asyncio.all_tasks(loop)) <= 2:  # 主线程+自身，避免过早退出
                 break
+    logging.debug("写入线程退出")
+
+
+def format_size(size: int) -> str:
+    if size >= 1048576:
+        return f"{size/1048576:>5.2f}M" if size < 1073741824 else f"{size/1073741824:>5.2f}G"
+    return f"{size/1024:>5.2f}K" if size >= 1024 else f"{size:>5}B"
 
 
 class api_crawler:
-    def __init__(self) -> None:
+    def __init__(self, settings: dict) -> None:
+        self._filter: dict = settings["filter"]
         self.local_fdict: dict[int, str] = {}
         self.output_folder: str = None
         self.session: ClientSession = None
@@ -58,21 +66,42 @@ class api_crawler:
             # if key := match(r"yande.re (\d+).+?", file): # 正则
             #     self.__fdict[key[1]] = file
             if file[:9] == "yande.re ":  # 字符串分割
-                index_space = 9 + file[9:].find(' ')  # 第二个空格前为id
                 # 如果不需要随tags变化更新文件名，可以考虑使用集合计算
-                self.local_fdict[int(file[9:index_space])] = file
+                self.local_fdict[int(file[9:9+file[9:].find(' ')])] = file  # 第二个空格前为id
+
+    def _post_normalize(self, post: dict) -> tuple[bool, dict]:
+        fname = post.get("file_name")
+        if fname is None:
+            post["file_name"] = fname = frename(decode(post['file_url']))
+        fext = post.get("file_ext", splitext(fname)[1][1:])
+        normalized_post = {"id": post["id"], "url": post["file_url"], "size": post["file_size"], "fname": fname, "fext": fext}
+        if self._filter["file_type"] == "origin":
+            return True, normalized_post
+        elif self._filter["file_type"] == "forcepng":
+            if fext != "png":
+                logging.info(f"{post['id']} 的原图格式非png，跳过")
+            return (False, {}) if fext != "png" else (True, normalized_post)
+        elif self._filter["file_type"] == "jpeg":
+            url, size, fname = post["jpeg_url"], post["jpeg_file_size"], frename(decode(post['jpeg_url']))
+        elif self._filter["file_type"] == "sample":
+            url, size, fname = post["sample_url"], post["sample_file_size"], frename(decode(post['sample_url']))
+        elif self._filter["file_type"] == "preview":
+            url, size, fname = post["preview_url"], 0, frename(decode(post['preview_url']))
+        return True, {"id": post["id"], "url": url, "size": size, "fname": fname, "fext": "jpg"}
+        # return True, {"id": post["id"], "url": post["file_url"], "size": post["file_size"], "fname": fname, "fext": post.get("file_ext", fname.rsplit('.', 1)[1])}
 
     # 空功能，在post_crawler中有具体功能，在pool_crawler中为无条件通过
     def _post_filter(self, post: dict) -> bool:
         return True
 
     async def close(self) -> None:
-        await self.session.close()
+        if self.session is not None:
+            await self.session.close()
 
     async def next_page(self) -> bool:
         return False
 
-    async def get_data(self, url) -> None:
+    async def get_data(self, url: str) -> list | dict | None:
         # 从json接口获取posts并序列化，若未出错则返回posts列表，否则返回None对象。错误处理在主函数中进行
         if self.session is None:
             self.session = ClientSession(headers=headers)
@@ -101,7 +130,8 @@ class api_crawler:
             if exist_file_name is None:
                 post["file_name"] = file_name
                 if self._post_filter(post):
-                    return post
+                    match_format_filter, post = self._post_normalize(post)
+                    return post if match_format_filter else None
             elif exist_file_name == file_name:
                 logging.info(f"{post_id} 已存在，跳过")
             else:
@@ -112,7 +142,7 @@ class api_crawler:
 
 class pool_crawler(api_crawler):
     def __init__(self, settings: dict, pool_id: int) -> None:
-        super().__init__()
+        super().__init__(settings)
         self.pool_id: int = pool_id
         self.flag_not_end: bool = True
         self._init_settings(settings)
@@ -141,11 +171,10 @@ class pool_crawler(api_crawler):
 # 初始化logger句柄的功能也在这里，避免处理输出文件夹的问题
 class post_crawler(api_crawler):
     def __init__(self, settings: dict) -> None:
-        super().__init__()
-        self.page: int = 0
-        self.start_page: int = 0
+        super().__init__(settings)
+        self.page: int = 1
+        self.start_page: int = 1
         self.stop_page: int = -1
-        self._filter: dict = settings["filter"]
         self.flag_tag_search: bool = False
         self.tags: set[str] = {}
         self.discard_tags: set[str] = {}
@@ -162,8 +191,7 @@ class post_crawler(api_crawler):
                 return None
             self.tags = set(tags.split(' '))
             self.tag_str = tags.replace(' ', '+')
-            self.discard_tags = set() if settings["discard_tags"] else set(
-                settings["discard_tags"].split(' '))
+            self.discard_tags = set() if settings["discard_tags"] else set(settings["discard_tags"].split(' '))
             self.output_folder = join(settings["folder_path"], tags)
             self.flag_tag_search = True
         elif settings["date_separate"]:
@@ -194,17 +222,20 @@ class post_crawler(api_crawler):
             return False
         # 图片比例判断(粗略)
         # 由于预览图经过压缩，因此判断预览图尺寸会比原图多出一点冗余
-        if self._filter["ratio"] != "all":
+        if self._filter["ratio"] == "all":
             matched = False
-            if self._filter["ratio"] == "horizontal" and not post["preview_width"] > post["preview_height"]:
+        elif self._filter["ratio"] == "horizontal":
+            if post["preview_width"] > post["preview_height"]:
                 matched = True
-            if self._filter["ratio"] == "vertical" and not post["preview_width"] < post["preview_height"]:
+        elif self._filter["ratio"] == "vertical":
+            if post["preview_width"] < post["preview_height"]:
                 matched = True
-            if self._filter["ratio"] == "square" and post["preview_width"] != post["preview_height"]:
+        elif self._filter["ratio"] == "square":
+            if post["preview_width"] != post["preview_height"]:
                 matched = True
-            if matched:
-                logging.info(f"{post['id']} 比例不符，跳过")
-                return False
+        if matched:
+            logging.info(f"{post['id']} 比例不符，跳过")
+            return False
         # 图片宽高比判断(精确)
         proportion = post["preview_width"] / post["preview_height"]
         pixel_limit = self._filter["pixel_limit"]
@@ -245,7 +276,7 @@ class post_crawler(api_crawler):
         return self.flag_not_end
 
 
-def init_logger(log_level: str = "info", log_file: str = None) -> None:
+def init_logger(log_level: str="info", log_file: str=None) -> None:
     logger = logging.getLogger()
     logger.setLevel(log_level)
     formatter = logging.Formatter("%(message)s", "%H:%M:%S")
@@ -294,8 +325,7 @@ def main() -> None:
     if crawler_thread.can_run():
         for task in [parallel_task(signals) for _ in range(crawler_thread.settings["thread_count"])]:
             loop.create_task(task.run())
-        loop.create_task(write_worker(
-            crawler_thread.crawler.output_folder, signals.write_queue))
+        loop.create_task(write_worker(crawler_thread.crawler.output_folder, signals))
         loop.run_until_complete(crawler_thread.run())
 
 
@@ -322,10 +352,9 @@ class get_data:
         # settings["thread_count"] = args.threads
         if args.ratio != "null":
             settings["filter"]["ratio"] = args.ratio
-        pool_id = args.pool_id
-        if pool_id > 0:
+        if args.pool_id > 0:
             self.mode = "pool"
-            self.crawler = pool_crawler(settings, pool_id)
+            self.crawler = pool_crawler(settings, args.pool_id)
         else:
             self.crawler = post_crawler(settings)
         if not self.crawler.output_folder:
@@ -339,15 +368,12 @@ class get_data:
     def can_run(self) -> bool:
         return bool(self.crawler.output_folder)
 
-    async def run(self):
+    async def _main_loop(self) -> None:
         queue_put_count = 0
         await self.crawler.next_page()
-        while True:
-            post = await self.crawler.get_post()
-            if post is None:
-                break
+        while post := await self.crawler.get_post():
             post_id = post["id"]
-            logging.info(f"待下载的post: {post_id}")
+            logging.info(f"{post_id} 符合下载条件")
             if self.latest_post_id == 0:
                 self.latest_post_id = post_id
                 if self.mode == "pages":
@@ -358,7 +384,8 @@ class get_data:
                 logging.warning("达到上次爬取终止位置")
                 break
             # post过滤器，按条件判断是否应该下载
-            await self.queue.put({"id": post_id, "url": post["file_url"], "size": post["file_size"], "fname": post["file_name"], "fext": post.get("file_ext", splitext(post["file_name"])[1][1:])})
+            # await self.queue.put({"id": post_id, "url": post["file_url"], "size": post["file_size"], "fname": post["file_name"], "fext": post.get("file_ext", splitext(post["file_name"])[1][1:])})
+            await self.queue.put(post)
             queue_put_count += 1
             logging.debug(f"{post_id} 已添加到队列")
             if queue_put_count > 30 or len(self.crawler.payload) < 10:
@@ -367,24 +394,24 @@ class get_data:
                 flag_not_end = await self.crawler.next_page()
                 if not flag_not_end and not self.task_clear.is_set():
                     self.task_clear.set()  # 通知下载线程无可用任务
-                    logging.info("所有抓取任务已完成")
+                    logging.debug("已请求完所有post的信息")
                 queue_put_count = 0
-        logging.info("抓取线程主循环结束")
+
+    async def run(self) -> None:
+        await self._main_loop()
+        logging.info("已处理所有post信息" + "，等待下载线程" if self.queue.qsize() else "")
         if not self.task_clear.is_set():
-            self.task_clear.set()
+            self.task_clear.set()  # 写入终止标志
         await self.crawler.close()
-        # if not self.task_clear.is_set():
-        #     self.task_clear.set()  # 写入终止标志
         loop = asyncio.get_event_loop()
-        while atask_count := len(asyncio.all_tasks(loop)):
+        while (atask_count := len(asyncio.all_tasks(loop))) and atask_count > 1:
             logging.info(f"{atask_count}个线程仍在运行")
-            await asyncio.sleep(5)
-            if atask_count <= 1:  # 等待其他线程退出
-                break
+            qsize = self.queue.qsize()
+            await asyncio.sleep(max(1, min(10, 2*qsize)))  # 根据队列中任务量决定等待时间，不考虑复杂情况
         if self.mode != "pool":
             async with aopen('config.json', 'w', encoding='utf-8') as f:
                 await f.write(dumps(self.settings, indent=4, ensure_ascii=False))
-        logging.info("抓取线程退出")
+        logging.debug("抓取线程退出")
 
 
 # 消费者线程：从data队列获取post并执行下载
@@ -397,25 +424,25 @@ class parallel_task:
         self.session: ClientSession = None
         self.total_file_size = 0
 
-    async def _download(self, post) -> None:
+    async def _download(self, post: dict) -> None:
         if self.session is None:
             self.session = ClientSession(headers=headers)
-        logging.info(f"{strftime('%H:%M:%S')} 开始下载p{post['id']} 大小{post['size'] / 1048576:.2f}M 类型{post['fext']}")
+        logging.info(f"{post['id']} 下载开始，大小：{format_size(post['size'])}，类型：{post['fext']}，开始于{strftime('%H:%M:%S')}")
         ts = time()
         img, size = await asyncget(self.session, post['url'], special_headers={'Host': 'files.yande.re', 'Referer': f"https://yande.re/post/show/{post['id']}"})
         if img is None:
-            logging.error(f"{post['id']}下载失败")
+            logging.error(f"{post['id']} 下载失败")
             return
         cost_time = time() - ts
         self.total_file_size += size
-        logging.info(f"{post['id']}下载完毕，耗时{cost_time:.2f}s，平均速度{post['size'] / (cost_time * 1024):.2f}k/s")
+        logging.info(f"{post['id']} 下载完毕，耗时{cost_time:>5.2f}s，平均速度{format_size(post['size']/cost_time)}/s")
         self.total_file_size += post['size']
         await self.file_write_queue.put((post['fname'], img))
 
-    async def _main_loop(self):
+    async def _main_loop(self) -> None:
         while True:
             try:
-                post = await asyncio.wait_for(self.queue.get(), timeout=5)
+                post = await asyncio.wait_for(self.queue.get(), timeout=1)
                 self.queue.task_done()
             except asyncio.TimeoutError:
                 logging.debug("下载线程正在等待")
@@ -435,9 +462,9 @@ class parallel_task:
             # 生产者线程更新数据库时建议启用
             # await asyncio.sleep(uniform(0.5, 10.0))
 
-    async def run(self):
+    async def run(self) -> None:
         await self._main_loop()
-        logging.info("下载线程退出")
+        logging.debug("下载线程退出")
 
 
 if __name__ == "__main__":

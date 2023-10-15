@@ -21,7 +21,6 @@
 
 ## 如何使用
 
-
 ### 配置文件
 
 `config.json`是完整的配置文件，包含所有设置项：
@@ -36,9 +35,19 @@
 - ~~`random_delay`: 未启用~~
 - `last_stop_id`和`tagSearch_stop_id`: 上次运行的最后终止id。运行在按页抓取模式且开始页码不大于1时只会记录最大值，设置了更大的开始页码或运行在tag搜索下会记录最新值，运行在pool下载模式时不会覆写。
 - `filter`: 图像过滤器：
-  - `ratio`: 按比例筛选，较粗略。可选项：`all`, `horizontal`, `vertical`, `square`
-  - `pixel_limit`: 按像素筛选，可筛选项：最小宽度、最小高度、最小宽高比，最大宽度、最大高度、最大宽高比
+  - `ratio`: 按最大压缩的预览图的宽高比例筛选图片，较粗略。如果需要精确筛选，应使用`pixel_limit`过滤。可选项：
+    - `all`: 不筛选
+    - `horizontal`: 宽>高
+    - `vertical`: 宽<高
+    - `square`: 宽=高
+  - `pixel_limit`: 按像素筛选。可筛选项：最小宽度、最小高度、最小宽高比，最大宽度、最大高度、最大宽高比
   - `file_limit`: 按体积筛选，单位为byte，大于0时有效
+  - `pic_type`: 按压缩率筛选。可选项：
+    - `origin`: 原图
+    - `forcepng`: 由于部分post的原图即为jpeg格式的压缩图片，开启此项将强制过滤掉所有原图格式不为png的post
+    - `jpeg`: jpeg格式的原尺寸压缩图片
+    - `sample`: 长和宽均不超过1500像素的压缩图片
+    - `preview`: 长和宽均不超过300像素的预览图
   - `safe_mode`: 过滤`explict`分级内容。~~真的会有人用吗~~
   - `rating_check`和`rating`: 更细致的分级过滤器
   - `status_check`: 按网站提供的状态标记排除部分post
@@ -60,10 +69,15 @@ Windows下命令行执行`python index.py`，Linux下可直接执行。
 
 ## 注意事项
 
+- 需要[aiohttp](https://pypi.org/project/aiohttp/)和[aiofiles](https://pypi.org/project/aiofiles/)两个库
 - 非pool下载模式下，每次运行后`config.json`中`last_stop_id`参数会被自动修改为爬取到的第一张图片的ID，便于下一次爬取时只爬取新post，无论停止条件为ID或是页码。
 - 通过命令行提供的参数会覆盖配置文件中的值
 
 ## 更新日志
+
+### 3.0.1
+
+新增：可选图片压缩率
 
 ### 3.0
 
