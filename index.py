@@ -49,7 +49,7 @@ def format_size(size: int) -> str:
 
 
 class api_crawler:
-    def __init__(self, settings) -> None:
+    def __init__(self, settings: dict) -> None:
         self._filter: dict = settings["filter"]
         self.local_fdict: dict[int, str] = {}
         self.output_folder: str = None
@@ -101,7 +101,7 @@ class api_crawler:
     async def next_page(self) -> bool:
         return False
 
-    async def get_data(self, url) -> list | dict | None:
+    async def get_data(self, url: str) -> list | dict | None:
         # 从json接口获取posts并序列化，若未出错则返回posts列表，否则返回None对象。错误处理在主函数中进行
         if self.session is None:
             self.session = ClientSession(headers=headers)
@@ -276,7 +276,7 @@ class post_crawler(api_crawler):
         return self.flag_not_end
 
 
-def init_logger(log_level: str = "info", log_file: str = None) -> None:
+def init_logger(log_level: str="info", log_file: str=None) -> None:
     logger = logging.getLogger()
     logger.setLevel(log_level)
     formatter = logging.Formatter("%(message)s", "%H:%M:%S")
@@ -368,7 +368,7 @@ class get_data:
     def can_run(self) -> bool:
         return bool(self.crawler.output_folder)
 
-    async def _main_loop(self):
+    async def _main_loop(self) -> None:
         queue_put_count = 0
         await self.crawler.next_page()
         while post := await self.crawler.get_post():
@@ -397,7 +397,7 @@ class get_data:
                     logging.debug("已请求完所有post的信息")
                 queue_put_count = 0
 
-    async def run(self):
+    async def run(self) -> None:
         await self._main_loop()
         logging.info("已处理所有post信息" + "，等待下载线程" if self.queue.qsize() else "")
         if not self.task_clear.is_set():
@@ -424,7 +424,7 @@ class parallel_task:
         self.session: ClientSession = None
         self.total_file_size = 0
 
-    async def _download(self, post) -> None:
+    async def _download(self, post: dict) -> None:
         if self.session is None:
             self.session = ClientSession(headers=headers)
         logging.info(f"{post['id']} 下载开始，大小：{format_size(post['size'])}，类型：{post['fext']}，开始于{strftime('%H:%M:%S')}")
@@ -439,7 +439,7 @@ class parallel_task:
         self.total_file_size += post['size']
         await self.file_write_queue.put((post['fname'], img))
 
-    async def _main_loop(self):
+    async def _main_loop(self) -> None:
         while True:
             try:
                 post = await asyncio.wait_for(self.queue.get(), timeout=1)
@@ -462,7 +462,7 @@ class parallel_task:
             # 生产者线程更新数据库时建议启用
             # await asyncio.sleep(uniform(0.5, 10.0))
 
-    async def run(self):
+    async def run(self) -> None:
         await self._main_loop()
         logging.debug("下载线程退出")
 
