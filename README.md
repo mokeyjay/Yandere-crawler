@@ -69,6 +69,7 @@ Windows下命令行执行`python index.py`，Linux下可直接执行。
 
 ## 注意事项
 
+- 需要[aiohttp](https://pypi.org/project/aiohttp/)和[aiofiles](https://pypi.org/project/aiofiles/)两个库
 - 非pool下载模式下，每次运行后`config.json`中`last_stop_id`参数会被自动修改为爬取到的第一张图片的ID，便于下一次爬取时只爬取新post，无论停止条件为ID或是页码。
 - 通过命令行提供的参数会覆盖配置文件中的值
 
