@@ -21,6 +21,7 @@
             "max_proportion": 0
         },
         "file_limit": 0,
+        "file_type": "origin",
         "safe_mode": true,
         "rating_check": false,
         "rating": "e",
