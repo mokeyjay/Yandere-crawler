@@ -190,9 +190,9 @@ class post_crawler(api_crawler):
             if not tags:
                 return None
             self.tags = set(tags.split(' '))
-            self.tag_str = tags.replace(' ', '+')
+            self.tags_str = tags.replace(' ', '+')
             self.discard_tags = set() if settings["discard_tags"] else set(settings["discard_tags"].split(' '))
-            self.output_folder = join(settings["folder_path"], tags)
+            self.output_folder = join(settings["folder_path"], tags.replace(':', ''))
             self.flag_tag_search = True
         elif settings["date_separate"]:
             self.output_folder = join(settings["folder_path"], strftime('%Y%m%d'))
