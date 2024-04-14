@@ -202,6 +202,7 @@ class post_crawler(api_crawler):
             makedirs(self.output_folder)
         self.start_page = settings["start_page"]
         self.stop_page = settings["stop_page"]
+        self.page = self.start_page
 
     def _post_filter(self, post: dict) -> bool:  # TODO: 分析各条件使用频率，重排序
         # pending判断
