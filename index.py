@@ -191,7 +191,7 @@ class post_crawler(api_crawler):
                 return None
             self.tags = set(tags.split(' '))
             self.tags_str = tags.replace(' ', '+')
-            self.discard_tags = set() if settings["discard_tags"] else set(settings["discard_tags"].split(' '))
+            self.discard_tags = set(settings["discard_tags"].split(' ')) if settings["discard_tags"] else set()
             self.output_folder = join(settings["folder_path"], tags.replace(':', ''))
             self.flag_tag_search = True
         elif settings["date_separate"]:
@@ -214,7 +214,7 @@ class post_crawler(api_crawler):
         if self._filter["safe_mode"] and post["rating"] == 'e':
             return False
         # 排除tag判断
-        if self.flag_tag_search and self.discard_tags & set(post["tags"]):
+        if self.flag_tag_search and self.discard_tags & set(post["tags"].split(' ')):
             logging.info(f"{post['id']} 包含待排除tags，跳过")
             return False
         # 文件体积判断
